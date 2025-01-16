@@ -1,1 +1,2 @@
-# cruk_hack_jan_2025
+# CancerQuad
+AI x Cancer Hack Jan 2025
