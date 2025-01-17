@@ -170,4 +170,10 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Other stuff
+.DS_Store
+Pipfile
 ssh/
+.next/
+node_modules/
+frontend/src/.DS_Store
