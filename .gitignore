@@ -177,3 +177,4 @@ ssh/
 .next/
 node_modules/
 frontend/src/.DS_Store
+frontend/package-lock.json

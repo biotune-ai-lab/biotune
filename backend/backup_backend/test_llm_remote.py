@@ -5,11 +5,12 @@ import os
 # Load environment variables from .env
 load_dotenv()
 
-# Fetch the LLM server URL
+# Fetch the LLM server URL and endpoints
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
 GEN_RESPONSE_ENDPOINT = os.getenv("GET_RESPONSE_ENDPOINT", "/gen_response")
 HEALTH_ENDPOINT = os.getenv("HEALTH_ENDPOINT", "/health")
-gen_response = SERVER_URL+GEN_RESPONSE_ENDPOINT
+GEN_RESPONSE_URL = f"{SERVER_URL}{GEN_RESPONSE_ENDPOINT}"
+HEALTH_URL = f"{SERVER_URL}{HEALTH_ENDPOINT}"
 
 # Step 1: Test if the LLM server is reachable
 def _health_check_server(health_url):
@@ -26,16 +27,11 @@ def _health_check_server(health_url):
         return False
 
 def setup():
-    if not _health_check_server(SERVER_URL+HEALTH_ENDPOINT):
+    if not _health_check_server(HEALTH_URL):
         print("LLM server is not reachable. Exiting...")
         exit()
 
-def chat_with_llm(initial_prompt):
-    # Prompt engineer the LLM
-    conversation_history = [
-        {"role": "system", "content": initial_prompt}
-    ]
-
+def chat_with_llm():
     # Main interaction loop
     while True:
         input_text = input("Enter your text (or type 'exit' to quit): ")
@@ -43,18 +39,17 @@ def chat_with_llm(initial_prompt):
             print("Exiting...")
             break
 
-        # Append the user's input to the conversation history
-        conversation_history.append({"role": "user", "content": input_text})
-
         # Send request to the LLM server
         try:
-            response = requests.post(gen_response, json={"conversation_history": conversation_history})
+            response = requests.post(GEN_RESPONSE_URL, json={"conversation_history": [{"role": "user", "content": input_text}]})
             if response.status_code == 200:
-                reply = response.json().get("response", "No response generated")
-                print("Generated Reply:", reply)
+                llm_reply = response.json().get("response", "No response generated")
 
-                # Add the assistant's reply to the conversation history
-                conversation_history.append({"role": "assistant", "content": reply})
+                # Ensure llm_reply is a string
+                if isinstance(llm_reply, str):
+                    print("LLM Reply:", llm_reply)
+                else:
+                    print("Unexpected response format from LLM. Please check the server output.")
             else:
                 print(f"Error from server: {response.status_code} - {response.text}")
         except Exception as e:
@@ -62,5 +57,4 @@ def chat_with_llm(initial_prompt):
 
 if __name__ == "__main__":
     setup()
-    initial_prompt = "You are a pirate chatbot. Respond in 50 words or less. Make controversial statements."
-    chat_with_llm(initial_prompt)
+    chat_with_llm()

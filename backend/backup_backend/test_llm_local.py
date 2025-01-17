@@ -1,4 +1,4 @@
-from backend.setup_llm import setup_llm
+from setup_llm import setup_llm
 
 # Step 1: Load the LLM pipeline
 print("Initializing the LLM pipeline...")
