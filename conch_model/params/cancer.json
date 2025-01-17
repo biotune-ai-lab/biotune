@@ -1,0 +1,116 @@
+{
+    "cancers": [
+      {
+        "organ": "Breast",
+        "types": [
+          {
+            "type": "Carcinoma",
+            "subtypes": [
+              "HER2 Positive",
+              "Luminal A",
+              "Luminal B",
+              "Triple Negative Breast Cancer (TNBC)"
+            ]
+          },
+          {
+            "type": "Sarcoma",
+            "subtypes": [
+              "Angiosarcoma",
+              "Leiomyosarcoma"
+            ]
+          }
+        ]
+      },
+      {
+        "organ": "Lung",
+        "types": [
+          {
+            "type": "Carcinoma",
+            "subtypes": [
+              "Non-Small Cell Lung Cancer (NSCLC)",
+              "Small Cell Lung Cancer (SCLC)",
+              "Adenocarcinoma",
+              "Squamous Cell Carcinoma"
+            ]
+          },
+          {
+            "type": "Sarcoma",
+            "subtypes": [
+              "Leiomyosarcoma",
+              "Synovial Sarcoma"
+            ]
+          }
+        ]
+      },
+      {
+        "organ": "Colon",
+        "types": [
+          {
+            "type": "Carcinoma",
+            "subtypes": [
+              "Adenocarcinoma",
+              "Mucinous Adenocarcinoma"
+            ]
+          },
+          {
+            "type": "Sarcoma",
+            "subtypes": [
+              "Gastrointestinal Stromal Tumor (GIST)",
+              "Leiomyosarcoma"
+            ]
+          }
+        ]
+      },
+      {
+        "organ": "Prostate",
+        "types": [
+          {
+            "type": "Carcinoma",
+            "subtypes": [
+              "Adenocarcinoma",
+              "Neuroendocrine Tumor"
+            ]
+          }
+        ]
+      },
+      {
+        "organ": "Liver",
+        "types": [
+          {
+            "type": "Carcinoma",
+            "subtypes": [
+              "Hepatocellular Carcinoma (HCC)",
+              "Cholangiocarcinoma"
+            ]
+          },
+          {
+            "type": "Sarcoma",
+            "subtypes": [
+              "Angiosarcoma",
+              "Rhabdomyosarcoma"
+            ]
+          }
+        ]
+      },
+      {
+        "organ": "Skin",
+        "types": [
+          {
+            "type": "Carcinoma",
+            "subtypes": [
+              "Basal Cell Carcinoma",
+              "Squamous Cell Carcinoma"
+            ]
+          },
+          {
+            "type": "Melanoma",
+            "subtypes": [
+              "Cutaneous Melanoma",
+              "Acral Lentiginous Melanoma"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+  
