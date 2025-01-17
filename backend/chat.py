@@ -1,8 +1,14 @@
 import re
 from dotenv import load_dotenv
-from conch_model.classify_cancer import get_cancer_subtype
 import os
 from openai import OpenAI
+import sys
+from conch_model.classify_cancer import get_cancer_subtype
+
+# Add the parent directory to sys.path
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Import the module from the parent directory
 
 # Load environment variables from .env
 load_dotenv()

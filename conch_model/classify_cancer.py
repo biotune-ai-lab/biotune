@@ -1,10 +1,15 @@
-from utils.conch_utils import get_model, get_image_embedding, get_text_embedding, get_similarity_score
 import json
 import numpy as np
 import argparse 
 import os
+from utils.conch_utils import get_model, get_image_embedding, get_text_embedding, get_similarity_score
+#import sys
 
-def generate_combinations(cancer_data="conch_model/data/TCGA-A7-A0DB-01Z-00-DX2.6C6A5F9C-294F-4A86-A0F1-B68D4729B535.svs"):
+# Add the parent directory of `utils` to sys.path
+#sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+#from utils.conch_utils import get_model, get_image_embedding, get_text_embedding, get_similarity_score
+
+def generate_combinations(cancer_data="/data/examples/breast.svs"):
     descriptions = []
     
     for cancer in cancer_data["cancers"]:
