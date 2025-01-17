@@ -3,26 +3,27 @@ import json
 import numpy as np
 import argparse 
 import os
+
+def generate_combinations(cancer_data="conch_model/data/TCGA-A7-A0DB-01Z-00-DX2.6C6A5F9C-294F-4A86-A0F1-B68D4729B535.svs"):
+    descriptions = []
+    
+    for cancer in cancer_data["cancers"]:
+        organ = cancer["organ"]
+        
+        # Loop through each cancer type
+        for cancer_type in cancer["types"]:
+            type_name = cancer_type["type"]
+            # If there are subtypes, generate combinations
+            if "subtypes" in cancer_type:
+                for subtype in cancer_type["subtypes"]:
+                    description = f"An H&E image of invasive {type_name.lower()} cancer in {organ.lower()}, subtype {subtype}."
+                    descriptions.append(description)
+    
+    return descriptions
+
 def get_cancer_subtype(image_path):
     with open('params/cancer.json', 'r') as file:
         cancer_data = json.load(file)
-
-    def generate_combinations(cancer_data):
-        descriptions = []
-        
-        for cancer in cancer_data["cancers"]:
-            organ = cancer["organ"]
-            
-            # Loop through each cancer type
-            for cancer_type in cancer["types"]:
-                type_name = cancer_type["type"]
-                # If there are subtypes, generate combinations
-                if "subtypes" in cancer_type:
-                    for subtype in cancer_type["subtypes"]:
-                        description = f"An H&E image of invasive {type_name.lower()} cancer in {organ.lower()}, subtype {subtype}."
-                        descriptions.append(description)
-        
-        return descriptions
     
     prompts = generate_combinations(cancer_data)
     prompts += ["The image does not contain cancer.", "Other"]
