@@ -15,10 +15,20 @@ import base64
 # Initialize the FastAPI app
 app = FastAPI()
 
+# Load environment variables
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
+
+TEMP_PATH = os.getenv("TEMP_PATH", "/data/tmp")  # Make endpoint configurable
+CONCH_ENDPOINT = os.getenv("CONCH_ENDPOINT", "http://127.0.0.1:54001")  # Make endpoint configurable
+
 # Create and mount uploads directory
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR = Path(TEMP_PATH)
 UPLOAD_DIR.mkdir(exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount(TEMP_PATH, StaticFiles(directory=TEMP_PATH), name=TEMP_PATH)
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,13 +37,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Load environment variables
-load_dotenv()
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -67,7 +70,7 @@ Available functions:
 
 If you determine a function should be called, respond with an output in the format:
 "function_name, arg1, arg2, ..."
-Example: "get_cancer_subtype, /uploads/filename.jpg"
+Example: "get_cancer_subtype, /data/tmp/filename.jpg"
 
 """
 
@@ -95,27 +98,19 @@ def parse_llm_response(response: str) -> tuple[Optional[str], Optional[str]]:
 def get_cancer_subtype(image_path: str) -> str:
     """Classify cancer subtype from an image."""
     try:
-        # Remove any leading slashes and get the full path
-        image_path = image_path.lstrip('/')
-        full_path = os.path.join(os.getcwd(), image_path)
+        # Extract just the filename from the path
+        filename = os.path.basename(image_path)
         
-        if not os.path.exists(full_path):
-            return f"Error: Image not found at {image_path}"
+        # Make request to your model endpoint
+        import requests
+        response = requests.get(f"{CONCH_ENDPOINT}/process/{filename}", 
+                              headers={"accept": "application/json"})
+        
+        if response.status_code != 200:
+            return f"Error: Failed to get prediction for {filename}"
             
-        # Here you would typically:
-        # 1. Load the image
-        # 2. Run your classification model
-        # 3. Return the results
+        return response.text
         
-        # For now, return a detailed placeholder response
-        return f"""
-Cancer subtype analysis for image at {image_path}:
-- Tissue Type: Histopathological specimen
-- Primary Classification: Carcinoma
-- Suggested Subtype: Ductal carcinoma
-- Confidence: 85%
-- Additional Notes: Sample shows characteristic cellular organization...
-"""
     except Exception as e:
         return f"Error analyzing image: {str(e)}"
 
@@ -171,19 +166,15 @@ async def chat_endpoint(request: ChatRequest):
                             "text": item.text
                         })
                     elif item.type == "image_url" and item.image_url:
-                        # Extract just the relative path from the full URL
                         url_path = item.image_url["url"]
-                        # Remove any domain/host part if present
-                        if "://" in url_path:
-                            url_path = url_path.split("/uploads/")[-1]
-                            url_path = f"uploads/{url_path}"
-                        else:
-                            url_path = url_path.lstrip('/')
                         
-                        image_path = os.path.join(os.getcwd(), url_path)
+                        # Extract filename from URL
+                        filename = url_path.split('/')[-1]
+                        
+                        # Construct the correct path in /data/tmp
+                        image_path = os.path.join(TEMP_PATH, filename)
                         print(f"Attempting to read image from: {image_path}")  # Debug log
                         
-                        # Read and encode the image
                         try:
                             with open(image_path, "rb") as image_file:
                                 encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
@@ -194,7 +185,7 @@ async def chat_endpoint(request: ChatRequest):
                                     }
                                 })
                                 # Store original path for function calls
-                                original_path = item.image_url["url"]
+                                original_path = f"{TEMP_PATH}/{filename}"
                         except Exception as e:
                             print(f"Error reading image: {str(e)}")
                             raise HTTPException(
@@ -220,33 +211,56 @@ async def chat_endpoint(request: ChatRequest):
         
         function_name, arguments = parse_llm_response(assistant_reply)
 
-        # In your chat endpoint, update the function call section:
         if function_name and function_name in function_map:
-            try:
-                # Pass the argument directly without splitting
-                result = function_map[function_name](arguments)
-                
-                # Return both the original response and the function result
-                return {
-                    "response": f"""I've analyzed the image and called the classification function.
-        Original response: {assistant_reply}
-        Function result: {result}""",
-                    "function_call": {
-                        "name": function_name,
-                        "result": result
-                    }
-                }
+                    try:
+                        # Get the model's prediction
+                        result = function_map[function_name](arguments)
+                        
+                        # Create a prompt for GPT to interpret the results
+                        analysis_prompt = f"""
+        Based on the image analysis, the model has detected the following:
+
+        {result}
+
+        Please provide a clear, professional summary of these findings, explaining what they mean 
+        for a medical professional. Include:
+        1. The primary cancer type identified
+        2. The confidence levels for each prediction
+        3. Any relevant clinical implications
+
+        Please format your response in a clear, organized way.
+        """
+                        # Get GPT's interpretation
+                        interpretation_response = client.chat.completions.create(
+                            model="gpt-4o",
+                            messages=[
+                                {"role": "system", "content": "You are a medical AI assistant specializing in cancer diagnosis interpretation."},
+                                {"role": "user", "content": analysis_prompt}
+                            ],
+                            max_tokens=500
+                        )
+
+                        interpreted_result = interpretation_response.choices[0].message.content
+
+                        return {
+                            "response": interpreted_result,
+                            "function_call": {
+                                "name": function_name,
+                                "raw_result": result,
+                                "interpreted_result": interpreted_result
+                            }
+                        }
+                    except Exception as e:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Error executing function '{function_name}': {str(e)}"
+                        )
+
+                return {"response": assistant_reply}
+
             except Exception as e:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Error executing function '{function_name}': {str(e)}"
-                )
-
-        return {"response": assistant_reply}
-
-    except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+                print(f"Error in chat endpoint: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 @app.post("/function")
 async def function_endpoint(request: FunctionRequest):
@@ -265,8 +279,8 @@ async def function_endpoint(request: FunctionRequest):
         raise HTTPException(status_code=500, detail=f"Error executing function: {str(e)}")
 
 if __name__ == "__main__":
-    #import uvicorn
-    #uvicorn.run(app, host="0.0.0.0", port=8000)
-    parse_llm_response("get_cancer_subtype, uploads/tcga1.png")
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+    #parse_llm_response("get_cancer_subtype, uploads/tcga1.png")
     
     
