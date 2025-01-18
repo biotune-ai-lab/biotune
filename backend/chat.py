@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 import base64
+import requests
 
 # Initialize the FastAPI app
 app = FastAPI()
@@ -24,6 +25,7 @@ if not OPENAI_API_KEY:
 
 TEMP_PATH = os.getenv("TEMP_PATH", "/data/tmp")  # Make endpoint configurable
 CONCH_ENDPOINT = os.getenv("CONCH_ENDPOINT", "http://127.0.0.1:54001")  # Make endpoint configurable
+VIRCHOW_ENDPOINT = os.getenv("VIRCHOW_ENDPOINT", "http://127.0.0.1:54002")  # Make endpoint configurable
 
 # Create and mount uploads directory
 UPLOAD_DIR = Path(TEMP_PATH)
@@ -63,14 +65,15 @@ class FunctionRequest(BaseModel):
 # System prompt template
 PROMPT_TEMPLATE = """
 You are an AI assistant specialized in analyzing medical images and cancer subtypes.
-After analyzing any images, you should determine if you need to call any functions. If you don't need to call a function, provide your analysis normally.
+After analyzing any images, you should determine if you need to call any functions. If you don't need to call a function, provide your analysis normally. Provide responses in plain text without markdown.
 
 Available functions:
-1. get_cancer_subtype: Classifies the subtype of cancer based on an image path.
+1. get_cancer_subtype: Classifies the subtype of cancer based on an image path. This function uses Conch, a Vision-Language Model trained on pathology data.
+2. get_best_image: Find the image most similar to the uploaded image based on morphology.
 
 If you determine a function should be called, respond with an output in the format:
 "function_name, arg1, arg2, ..."
-Example: "get_cancer_subtype, /data/tmp/filename.jpg"
+Example: "get_cancer_subtype, /data/tmp/tcga20e9.jpg"
 
 """
 
@@ -102,8 +105,25 @@ def get_cancer_subtype(image_path: str) -> str:
         filename = os.path.basename(image_path)
         
         # Make request to your model endpoint
-        import requests
         response = requests.get(f"{CONCH_ENDPOINT}/process/{filename}", 
+                              headers={"accept": "application/json"})
+        
+        if response.status_code != 200:
+            return f"Error: Failed to get prediction for {filename}"
+            
+        return response.text
+        
+    except Exception as e:
+        return f"Error analyzing image: {str(e)}"
+
+def get_best_image(image_path: str) -> str:
+    """Get image that most closely matches uploaded images."""
+    try:
+        # Extract just the filename from the path
+        filename = os.path.basename(image_path)
+        
+        # Make request to your model endpoint
+        response = requests.get(f"{VIRCHOW_ENDPOINT}/process/{filename}", 
                               headers={"accept": "application/json"})
         
         if response.status_code != 200:
@@ -117,6 +137,7 @@ def get_cancer_subtype(image_path: str) -> str:
 # Function mapping
 function_map = {
     "get_cancer_subtype": get_cancer_subtype,
+    "get_best_image": get_best_image,
 }
 
 @app.get("/health")
@@ -212,55 +233,55 @@ async def chat_endpoint(request: ChatRequest):
         function_name, arguments = parse_llm_response(assistant_reply)
 
         if function_name and function_name in function_map:
-                    try:
-                        # Get the model's prediction
-                        result = function_map[function_name](arguments)
-                        
-                        # Create a prompt for GPT to interpret the results
-                        analysis_prompt = f"""
-        Based on the image analysis, the model has detected the following:
+            try:
+                # Get the model's prediction
+                result = function_map[function_name](arguments)
+                
+                # Create a prompt for GPT to interpret the results
+                analysis_prompt = f"""
+Based on the image analysis, the model has detected the following:
 
-        {result}
+{result}
 
-        Please provide a clear, professional summary of these findings, explaining what they mean 
-        for a medical professional. Include:
-        1. The primary cancer type identified
-        2. The confidence levels for each prediction
-        3. Any relevant clinical implications
+Please provide a clear, professional summary of these findings, explaining what they mean 
+for a medical professional. Include:
+1. The primary cancer type identified
+2. The confidence levels for each prediction
+3. Any relevant clinical implications
 
-        Please format your response in a clear, organized way.
-        """
-                        # Get GPT's interpretation
-                        interpretation_response = client.chat.completions.create(
-                            model="gpt-4o",
-                            messages=[
-                                {"role": "system", "content": "You are a medical AI assistant specializing in cancer diagnosis interpretation."},
-                                {"role": "user", "content": analysis_prompt}
-                            ],
-                            max_tokens=500
-                        )
+Please format your response in a clear, organized way.
+"""
+                # Get GPT's interpretation
+                interpretation_response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are a medical AI assistant specializing in cancer diagnosis interpretation. Provide responses in plain text without markdown."},
+                        {"role": "user", "content": analysis_prompt}
+                    ],
+                    max_tokens=500
+                )
 
-                        interpreted_result = interpretation_response.choices[0].message.content
+                interpreted_result = interpretation_response.choices[0].message.content
 
-                        return {
-                            "response": interpreted_result,
-                            "function_call": {
-                                "name": function_name,
-                                "raw_result": result,
-                                "interpreted_result": interpreted_result
-                            }
-                        }
-                    except Exception as e:
-                        raise HTTPException(
-                            status_code=500,
-                            detail=f"Error executing function '{function_name}': {str(e)}"
-                        )
-
-                return {"response": assistant_reply}
-
+                return {
+                    "response": interpreted_result,
+                    "function_call": {
+                        "name": function_name,
+                        "raw_result": result,
+                        "interpreted_result": interpreted_result
+                    }
+                }
             except Exception as e:
-                print(f"Error in chat endpoint: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error executing function '{function_name}': {str(e)}"
+                )
+
+        return {"response": assistant_reply}
+
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 @app.post("/function")
 async def function_endpoint(request: FunctionRequest):
