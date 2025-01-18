@@ -8,7 +8,7 @@ import PIL.Image
 import os
 import argparse
 
-DATA_PATH = "/data/tcga-brca"
+DATA_PATH = "/data/demo_database"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 def read_slide(img, coords = (0,0), dim=(512, 512), level=1):
@@ -20,6 +20,15 @@ def read_slide(img, coords = (0,0), dim=(512, 512), level=1):
 
 def read_img(img):
     return PIL.Image.open(img)
+
+def read_image(img):
+    if img.endswith(".svs"):
+        image = read_slide(img, (2500, 12500), (512, 512), 1).convert("RGB")
+    else:
+        image = read_img(img).convert("RGB")
+    return image
+
+
 
 def list_all_files(directory):
     file_list = []
@@ -37,17 +46,14 @@ def get_embedding(model, image):
     embedding = embedding.to(torch.float16)
     return embedding
 
-def find_most_similar_image(org_image, model, transforms, coords = (0,0), dim=(512, 512), level=1):
+def find_most_similar_image(org_image, model, transforms):
     org_image = transforms(org_image).unsqueeze(0).to(DEVICE)
     org_embedding = get_embedding(model, org_image)
 
     best_similarity = 0
     for f in list_all_files(DATA_PATH):
-        if not f.endswith(".svs"):
-            image = read_img(f)
-        else:
-            image = read_slide(f, coords, dim, level).convert("RGB")
-        
+        image = read_image(f)
+
         image = transforms(image).unsqueeze(0).to(DEVICE)
         embedding = get_embedding(model, image)
         similarity = torch.nn.functional.cosine_similarity(org_embedding, embedding)
@@ -59,10 +65,7 @@ def find_most_similar_image(org_image, model, transforms, coords = (0,0), dim=(5
     return best_image, best_similarity
 
 def save_image(image_path, output_path):
-  if not best_image.endswith(".svs"):
-    image = read_img(image_path)
-  else:
-    image = read_slide(best_image)
+  image = read_image(image_path)
   image.save(output_path)
     
 
@@ -76,8 +79,8 @@ if __name__ == "__main__":
   model = model.to(DEVICE)
 
   transforms = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
-  org_image = read_slide(args.image, (2500, 12500), (512, 512), 1).convert("RGB")
-  best_image, best_similarity = find_most_similar_image(org_image, model, transforms, (2500, 12500), (512, 512), 1)
+  org_image = read_image(args.image)
+  best_image, best_similarity = find_most_similar_image(org_image, model, transforms)
 
   print(f"Best image: {best_image}, Similarity: {best_similarity}")
   save_image(best_image, os.path.join("/data/tmp/","most_similar_image_virchow.png"))
