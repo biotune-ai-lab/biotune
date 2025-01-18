@@ -1,11 +1,10 @@
 "use client";
 //import React, { useState } from "react";
 import React, { useState, useEffect } from "react";
-
-
 import { useUpload } from "../utilities/runtime-helpers";
 
 function MainComponent() {
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [showChat, setShowChat] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -20,62 +19,8 @@ function MainComponent() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [isSearchListening, setIsSearchListening] = useState(false);
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setAnalyzing(true);
-    const { url, error } = await upload({ file });
-    if (error) {
-      setError(error);
-      setAnalyzing(false);
-      return;
-    }
-
-    setImages((prev) => [...prev, url]);
-
-    try {
-      const response = await fetch("/integrations/gpt-vision/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Analyze this histopathology image for cellular structures and potential abnormalities",
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
-      });
-
-      const data = await response.json();
-      const analysisText = data.choices[0].message.content;
-
-      setAnalysis(analysisText);
-      setMessages((prev) => [
-        ...prev,
-        { text: "I've uploaded a new image for analysis", sender: "user" },
-        { text: analysisText, sender: "assistant" },
-      ]);
-    } catch (err) {
-      setError("Failed to analyze image");
-    }
-
-    setAnalyzing(false);
-  };
+  // Backend URL from the environment variable
+  const backendUrl = process.env.NEXT_PUBLIC_OPENAI_URL || "http://0.0.0.0:8000";
 
   const handleDataUpload = async (e) => {
     const file = e.target.files[0];
@@ -92,7 +37,7 @@ function MainComponent() {
     setData((prev) => [...prev, url]);
 
     try {
-      const response = await fetch("/integrations/gpt-vision/", {
+      const response = await fetch(`${backendUrl}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -137,53 +82,151 @@ function MainComponent() {
     setAnalyzing(false);
   };
 
-  const handleSendMessage = async (message) => {
-    setMessages((prev) => [...prev, { text: message, sender: "user" }]);
-
+const handleMessage = async (input, type = 'text') => {
     try {
-      const response = await fetch("/integrations/gpt-vision/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      setMessages(prev => [...prev.filter(msg => !msg.loading), { text: "Generating response...", sender: "assistant", loading: true }]);
+      
+      let url;
+      let filename;
+      if (type === 'image') {
+        setAnalyzing(true);
+        const file = input;
+        const uploadResult = await upload({ file });
+        if (uploadResult.error) {
+          setError(uploadResult.error);
+          setAnalyzing(false);
+          setMessages(prev => prev.filter(msg => !msg.loading));
+          return;
+        }
+        url = uploadResult.url;
+        filename = file.name;
+        setImages(prev => [...prev, { 
+          url,
+          filename,
+          index: prev.length
+        }]);
+      }
+  
+      // Prepare message history (excluding loading messages)
+      const messageHistory = messages.filter(msg => !msg.loading).map(msg => {
+        if (msg.image) {
+          return {
+            role: msg.sender,
+            content: [
+              { 
+                type: "text", 
+                text: msg.imageIndex !== undefined 
+                  ? `[Referring to image ${msg.imageIndex + 1}] ${msg.text}`
+                  : msg.text 
+              },
+              { type: "image_url", image_url: { url: msg.image } }
+            ]
+          };
+        }
+        return {
+          role: msg.sender === "user" ? "user" : "assistant",
+          content: msg.text
+        };
+      });
+  
+      // Make the API request
+      let apiRequest;
+      if (type === 'image') {
+        const newImageIndex = images.length;
+        apiRequest = {
           messages: [
+            ...messageHistory,
             {
               role: "user",
               content: [
                 {
                   type: "text",
-                  text: message,
+                  text: `[Image ${newImageIndex + 1}] Analyze this histopathology image for cellular structures and potential abnormalities`,
                 },
                 {
                   type: "image_url",
-                  image_url: {
-                    url: images[images.length - 1] || data[data.length - 1],
-                  },
-                },
-              ],
-            },
-          ],
-        }),
-      });
+                  image_url: { url }
+                }
+              ]
+            }
+          ]
+        };
+      } else {
+        const imageRegex = /image\s*(\d+)/i;
+        const match = input.match(imageRegex);
+        
+        if (match && images[match[1] - 1]) {
+          const imageIndex = match[1] - 1;
+          const imageInfo = images[imageIndex];
+          apiRequest = {
+            messages: [
+              ...messageHistory,
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: `[Referring to image ${imageIndex + 1} (${imageInfo.filename})] ${input}` },
+                  { type: "image_url", image_url: { url: imageInfo.url } }
+                ]
+              }
+            ]
+          };
+        } else {
+          apiRequest = {
+            messages: [
+              ...messageHistory,
+              {
+                role: "user",
+                content: input
+              }
+            ]
+          };
+        }
+      }
 
-      const data = await response.json();
-      const analysisText = data.choices[0].message.content;
-
-      setMessages((prev) => [
-        ...prev,
-        { text: analysisText, sender: "assistant" },
-      ]);
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          text: "Sorry, I couldn't analyze that aspect of the data.",
-          sender: "assistant",
+      const response = await fetch(`${backendUrl}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify(apiRequest),
+      });
+  
+      const responseData = await response.json();
+      const analysisText = responseData.response || "No response received";
+      
+      if (type === 'image') {
+        setMessages(prev => [
+          ...prev.filter(msg => !msg.loading),
+          { 
+            text: `I've uploaded ${filename} for analysis`, 
+            sender: "user",
+            image: url,
+            imageIndex: images.length,
+            filename
+          },
+          { text: analysisText, sender: "assistant" }
+        ]);
+      } else {
+        setMessages(prev => [
+          ...prev.filter(msg => !msg.loading),
+          { text: input, sender: "user" },
+          { text: analysisText, sender: "assistant" }
+        ]);
+      }
+  
+    } catch (err) {
+      console.error('Error:', err);
+      setMessages(prev => [
+        ...prev.filter(msg => !msg.loading),
+        { text: `Error: ${err.message}`, sender: "assistant" }
       ]);
+    } finally {
+      if (type === 'image') {
+        setAnalyzing(false);
+      }
     }
   };
+
   const handleAnalyzeWithAI = () => {
     setCurrentPage(2);
     setTimeout(() => {
@@ -203,7 +246,7 @@ function MainComponent() {
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         setTranscript(transcript);
-        handleSendMessage(transcript);
+        handleMessage(transcript);
       };
 
       recognition.onerror = (event) => {
@@ -248,7 +291,7 @@ function MainComponent() {
 
   const handleSearch = async (query) => {
     try {
-      const response = await fetch("/integrations/chat-gpt/", {
+      const response = await fetch(`${backendUrl}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -268,6 +311,7 @@ function MainComponent() {
         }),
       });
       const data = await response.json();
+      console.log(data);
     } catch (error) {
       console.error("Error searching models:", error);
     }
@@ -318,25 +362,25 @@ function MainComponent() {
                     </clipPath>
                   </defs>
                   <path
-                    clip-path="url(#a)"
+                    clipPath="url(#a)"
                     d="M84.549 7.875C72.476 6.556 61.203.76 52.049 4.317c-8.355 3.558-10.434 11.993-16.67 19.549-5.837 6.675-16.27 11.992-20.428 19.987-5.437 8.435-4.997 19.069-7.076 27.504C4.118 84.709.76 94.902 4.118 106.016c3.317 10.194 12.512 16.43 17.909 24.425 4.997 7.076 6.676 16.43 11.673 21.747 9.154 6.636 21.267 4.877 32.5 4.437 16.27-.88 35.418.88 49.61-12.872 7.915-7.556 15.39-8.435 21.227-23.986 6.276-15.55-1.24-27.063 1.28-34.179 2.917-8.435 9.553-13.312 9.154-21.307-.84-12.432-4.997-17.31-14.592-28.423-4.996-5.756-7.475-13.312-19.588-23.985-5.836-5.317-17.51-2.679-28.742-3.998z"
                     fill="#e4aa68"
-                    fill-rule="evenodd"
-                    fill-opacity="1"
+                    fillRule="evenodd"
+                    fillOpacity="1"
                     stroke="none"
                   />
                   <path
                     d="M42.534 80.351c-.44 8.435 7.076 18.19 10.834 27.064 2.918 4.877 10.393 7.995 15.39 12.432 5.837 5.797 9.155 12.873 16.67 12.873 7.915.44 22.067-3.558 28.703-10.634 5.836-8.435 8.755-19.548 9.994-25.784 2.079-12.433-7.476-21.307-9.994-29.303-2.079-4.437-9.155-6.196-14.551-10.633-5.837-4.437-9.595-11.993-16.67-12.433-8.315-.48-18.31 7.996-23.706 11.513-8.755 8.915-16.67 15.99-16.67 24.905z"
                     fill="#d88b31"
-                    fill-rule="evenodd"
-                    fill-opacity="1"
+                    fillRule="evenodd"
+                    fillOpacity="1"
                     stroke="none"
                   />
                   <path
                     d="M36.698 73.156c-.44 8.475 7.075 18.229 10.833 27.143 2.918 4.877 10.394 7.995 15.39 12.433 5.837 5.756 9.155 12.872 16.67 12.872 7.916.44 22.067-3.558 28.703-10.674 5.837-8.435 8.755-19.548 9.994-25.744 2.08-12.472-7.475-21.347-9.994-29.342-2.078-4.438-9.154-6.236-14.55-10.674-5.837-4.437-9.595-11.993-16.67-12.432-8.316-.48-18.31 7.995-23.706 11.553-8.755 8.874-16.67 15.99-16.67 24.865z"
                     fill="#0094b2"
-                    fill-rule="evenodd"
-                    fill-opacity="1"
+                    fillRule="evenodd"
+                    fillOpacity="1"
                     stroke="none"
                   />
                 </svg>
@@ -350,23 +394,33 @@ function MainComponent() {
             </div>
             <div className="flex-1 overflow-y-auto mb-4">
               {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`mb-4 ${
+                  msg.sender === "user" ? "text-right" : ""
+                }`}
+              >
                 <div
-                  key={idx}
-                  className={`mb-4 ${
-                    msg.sender === "user" ? "text-right" : ""
+                  className={`inline-block p-3 rounded-lg ${
+                    msg.sender === "user"
+                      ? "bg-[#6366f1] text-white"
+                      : msg.loading
+                      ? "bg-gray-100 animate-pulse"
+                      : "bg-gray-100"
                   }`}
                 >
-                  <div
-                    className={`inline-block p-3 rounded-lg ${
-                      msg.sender === "user"
-                        ? "bg-[#6366f1] text-white"
-                        : "bg-gray-100"
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
+                  {msg.loading ? (
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce mr-1" style={{ animationDelay: "0ms" }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce mr-1" style={{ animationDelay: "150ms" }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                    </div>
+                  ) : (
+                    msg.text
+                  )}
                 </div>
-              ))}
+              </div>
+            ))}
             </div>
             <div className="relative flex items-center">
               <input
@@ -377,7 +431,7 @@ function MainComponent() {
                 onChange={(e) => setTranscript(e.target.value)}
                 onKeyPress={(e) => {
                   if (e.key === "Enter") {
-                    handleSendMessage(e.target.value);
+                    handleMessage(e.target.value);
                     setTranscript("");
                   }
                 }}
@@ -399,7 +453,7 @@ function MainComponent() {
               <input
                 type="file"
                 accept="image/*"
-                onChange={handleImageUpload}
+                onChange={(e) => handleMessage(e.target.files[0], 'image')}
                 className="hidden"
                 id="image-upload"
               />
@@ -416,24 +470,27 @@ function MainComponent() {
               {error && <div className="text-red-500 mt-2">{error}</div>}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              {images.map((img, idx) => (
-                <div key={idx} className="relative group">
-                  <img
-                    src={img}
-                    alt={`Uploaded medical image ${idx + 1}`}
-                    className="w-full h-40 object-cover rounded-lg transition-all duration-300 group-hover:brightness-90"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      className="bg-[#6366f1] text-white px-4 py-2 rounded-lg hover:bg-[#4f46e5] transition-colors"
-                      onClick={() => setCurrentPage(2)}
-                    >
-                      Analyze with Models →
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+  {images.map((img, idx) => (
+    <div key={idx} className="relative group">
+      <img
+        src={img.url}
+        alt={`Uploaded medical image: ${img.filename}`}
+        className="w-full h-40 object-cover rounded-lg transition-all duration-300 group-hover:brightness-90"
+      />
+      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white px-2 py-1 text-sm">
+        {img.filename}
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          className="bg-[#6366f1] text-white px-4 py-2 rounded-lg hover:bg-[#4f46e5] transition-colors"
+          onClick={() => setCurrentPage(2)}
+        >
+          Analyze with Models →
+        </button>
+      </div>
+    </div>
+  ))}
+</div>
 
             <div className="mt-8">
               <h2 className="text-xl font-bold mb-2">Gene Expression</h2>
