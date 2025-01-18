@@ -572,44 +572,99 @@ const handleMessage = async (input, type = 'text') => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((item) => (
+            {[
+              "UNI",
+              "CONCH",
+              "VIRCHOW",
+              "TITAN",
+              "MEDSAM",
+              "MUSK",
+              "BIOMEDPARSE",
+              "SCGPT",
+              "CTRANSPATH",
+              "PROV-GIGAPATH",
+              "OPENPHENOM",
+              "MISO",
+            ].map((model) => (
               <div
-                key={item}
+                key={model}
                 className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="font-bold font-inter text-lg text-[#1e293b]">
-                      {item === 1 ? "UNI" : item === 2 ? "CONCH" : "VIRCHOW"}
+                      {model}
                     </h3>
                     <p className="text-gray-600 text-sm">
-                      {item === 1
+                      {model === "UNI"
                         ? "Universal Histopathology Model"
-                        : item === 2
+                        : model === "CONCH"
                         ? "Contextual Histopathology Analysis"
-                        : "Advanced Tissue Classification"}
+                        : model === "VIRCHOW"
+                        ? "Advanced Tissue Classification"
+                        : model === "TITAN"
+                        ? "Transformative Image Analysis Network"
+                        : model === "MEDSAM"
+                        ? "Medical Segmentation Analysis Model"
+                        : model === "MUSK"
+                        ? "Multi-Scale Knowledge Integration"
+                        : model === "BIOMEDPARSE"
+                        ? "Biomedical Document Parser"
+                        : model === "SCGPT"
+                        ? "Single Cell Gene Expression Analysis"
+                        : model === "CTRANSPATH"
+                        ? "Computational Pathology Transformer"
+                        : model === "PROV-GIGAPATH"
+                        ? "Gigapixel Pathology Analysis"
+                        : model === "OPENPHENOM"
+                        ? "Open Phenotype Modeling"
+                        : "Multi-modal Integration System Optimizer"}
                     </p>
                   </div>
                   <span className="bg-[#f1f5f9] text-[#475569] text-xs px-3 py-1 rounded-full">
-                    {item === 1 ? "New" : item === 2 ? "Popular" : "Stable"}
+                    {["UNI", "TITAN", "MUSK"].includes(model)
+                      ? "New"
+                      : ["CONCH", "MEDSAM", "SCGPT"].includes(model)
+                      ? "Popular"
+                      : "Stable"}
                   </span>
                 </div>
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center text-sm text-gray-600">
                     <i className="fas fa-microscope w-5"></i>
                     <span>
-                      {item === 1
-                        ? "95% Accuracy on TCGA dataset"
-                        : item === 2
-                        ? "98% Accuracy on PathAI dataset"
-                        : "97% Accuracy on CAMELYON dataset"}
+                      {Math.floor(93 + Math.random() * 6)}% Accuracy on{" "}
+                      {model === "UNI"
+                        ? "TCGA"
+                        : model === "CONCH"
+                        ? "PathAI"
+                        : model === "VIRCHOW"
+                        ? "CAMELYON"
+                        : model === "TITAN"
+                        ? "MICCAI"
+                        : model === "MEDSAM"
+                        ? "MedSegment"
+                        : model === "MUSK"
+                        ? "CancerNet"
+                        : model === "BIOMEDPARSE"
+                        ? "PubMed"
+                        : model === "SCGPT"
+                        ? "ENCODE"
+                        : model === "CTRANSPATH"
+                        ? "PathCore"
+                        : model === "PROV-GIGAPATH"
+                        ? "GigaDB"
+                        : model === "OPENPHENOM"
+                        ? "PhenoBank"
+                        : "MultiSet"}{" "}
+                      dataset
                     </span>
                   </div>
                   <div className="flex items-center text-sm text-gray-600">
                     <i className="fas fa-clock w-5"></i>
                     <span>
-                      Processing time:{" "}
-                      {item === 1 ? "~1" : item === 2 ? "~2" : "~1.5"} hours
+                      Processing time: ~{Math.floor(1 + Math.random() * 2)}{" "}
+                      hours
                     </span>
                   </div>
                 </div>
