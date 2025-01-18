@@ -10,10 +10,14 @@ function MainComponent() {
   const [messages, setMessages] = useState([]);
   const [upload, { loading }] = useUpload();
   const [images, setImages] = useState([]);
+  const [data, setData] = useState([]);
   const [error, setError] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
   const [analysis, setAnalysis] = useState(null);
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [isSearchListening, setIsSearchListening] = useState(false);
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -70,6 +74,67 @@ function MainComponent() {
 
     setAnalyzing(false);
   };
+
+  const handleDataUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setAnalyzing(true);
+    const { url, error } = await upload({ file });
+    if (error) {
+      setError(error);
+      setAnalyzing(false);
+      return;
+    }
+
+    setData((prev) => [...prev, url]);
+
+    try {
+      const response = await fetch("/integrations/gpt-vision/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Analyze this gene expression data and provide insights about patterns and potential biological significance",
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url,
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      const analysisText = data.choices[0].message.content;
+
+      setAnalysis(analysisText);
+      setMessages((prev) => [
+        ...prev,
+        {
+          text: "I've uploaded gene expression data for analysis",
+          sender: "user",
+        },
+        { text: analysisText, sender: "assistant" },
+      ]);
+    } catch (err) {
+      setError("Failed to analyze data");
+    }
+
+    setAnalyzing(false);
+  };
+
   const handleSendMessage = async (message) => {
     setMessages((prev) => [...prev, { text: message, sender: "user" }]);
 
@@ -91,7 +156,7 @@ function MainComponent() {
                 {
                   type: "image_url",
                   image_url: {
-                    url: images[images.length - 1],
+                    url: images[images.length - 1] || data[data.length - 1],
                   },
                 },
               ],
@@ -111,7 +176,7 @@ function MainComponent() {
       setMessages((prev) => [
         ...prev,
         {
-          text: "Sorry, I couldn't analyze that aspect of the image.",
+          text: "Sorry, I couldn't analyze that aspect of the data.",
           sender: "assistant",
         },
       ]);
@@ -123,6 +188,94 @@ function MainComponent() {
       setCurrentPage(3);
     }, 2000);
   };
+  const handleVoiceInput = () => {
+    if ("webkitSpeechRecognition" in window) {
+      const recognition = new window.webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setTranscript(transcript);
+        handleSendMessage(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        console.error(event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    }
+  };
+  const handleSearchVoiceInput = () => {
+    if ("webkitSpeechRecognition" in window) {
+      const recognition = new window.webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsSearchListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setSearchQuery(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        console.error(event.error);
+        setIsSearchListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsSearchListening(false);
+      };
+
+      recognition.start();
+    }
+  };
+
+  const handleSearch = async (query) => {
+    try {
+      const response = await fetch("/integrations/chat-gpt/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a helpful AI assistant that helps users find the right cancer research models based on their search queries.",
+            },
+            {
+              role: "user",
+              content: `Find relevant cancer research models for: ${query}`,
+            },
+          ],
+        }),
+      });
+      const data = await response.json();
+    } catch (error) {
+      console.error("Error searching models:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (searchQuery) {
+      handleSearch(searchQuery);
+    }
+  }, [searchQuery]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#f8fafc] to-[#e2e8f0]">
@@ -213,18 +366,28 @@ function MainComponent() {
                 </div>
               ))}
             </div>
-            <div className="relative">
+            <div className="relative flex items-center">
               <input
                 type="text"
                 placeholder="Type your message..."
                 className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
                 onKeyPress={(e) => {
                   if (e.key === "Enter") {
                     handleSendMessage(e.target.value);
-                    e.target.value = "";
+                    setTranscript("");
                   }
                 }}
               />
+              <button
+                onClick={handleVoiceInput}
+                className="absolute right-2 p-2 text-gray-500 hover:text-[#6366f1]"
+              >
+                <i
+                  className={`fas ${isListening ? "fa-stop" : "fa-microphone"}`}
+                ></i>
+              </button>
             </div>
           </div>
 
@@ -269,6 +432,37 @@ function MainComponent() {
                 </div>
               ))}
             </div>
+
+            <div className="mt-8">
+              <h2 className="text-xl font-bold mb-2">Gene Expression</h2>
+              <input
+                type="file"
+                accept=".csv,.tsv,.txt"
+                onChange={handleDataUpload}
+                className="hidden"
+                id="data-upload"
+              />
+              <label
+                htmlFor="data-upload"
+                className="block w-full py-2 px-4 text-center bg-[#6366f1] text-white rounded-lg cursor-pointer hover:bg-[#4f46e5] transition-all transform hover:scale-105 disabled:opacity-50"
+              >
+                {analyzing
+                  ? "Analyzing Data..."
+                  : loading
+                  ? "Uploading..."
+                  : "Upload Data"}
+              </label>
+              {data.length > 0 && (
+                <div className="mt-4">
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">
+                      {data.length} data file{data.length !== 1 ? "s" : ""}{" "}
+                      uploaded
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : currentPage === 2 ? (
@@ -305,7 +499,16 @@ function MainComponent() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <i className="fas fa-search absolute right-6 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <button
+                onClick={handleSearchVoiceInput}
+                className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#6366f1] transition-colors"
+              >
+                <i
+                  className={`fas ${
+                    isSearchListening ? "fa-stop" : "fa-microphone"
+                  }`}
+                ></i>
+              </button>
             </div>
           </div>
 
@@ -360,15 +563,17 @@ function MainComponent() {
         </main>
       )}
 
-      <div className="fixed bottom-8 right-8 flex gap-4">
-        <button
-          onClick={handleAnalyzeWithAI}
-          className="bg-[#6366f1] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#4f46e5] transition-all transform hover:scale-105 flex items-center justify-center"
-        >
-          <span className="mr-2">Analyze with AI</span>
-          <i className="fas fa-robot"></i>
-        </button>
-      </div>
+      {currentPage === 1 && (
+        <div className="fixed bottom-8 right-8 flex gap-4">
+          <button
+            onClick={handleAnalyzeWithAI}
+            className="bg-[#6366f1] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#4f46e5] transition-all transform hover:scale-105 flex items-center justify-center"
+          >
+            <span className="mr-2">Analyze with AI</span>
+            <i className="fas fa-robot"></i>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
