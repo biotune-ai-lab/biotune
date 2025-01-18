@@ -449,7 +449,7 @@ const handleMessage = async (input, type = 'text') => {
 
           <div className="w-1/2 p-4">
             <div className="mb-4">
-              <h2 className="text-xl font-bold mb-2">Images</h2>
+              <h2 className="text-xl font-bold mb-2">Drop your files here...</h2>
               <input
                 type="file"
                 accept="image/*"
@@ -462,10 +462,10 @@ const handleMessage = async (input, type = 'text') => {
                 className="block w-full py-2 px-4 text-center bg-[#6366f1] text-white rounded-lg cursor-pointer hover:bg-[#4f46e5] transition-all transform hover:scale-105 disabled:opacity-50"
               >
                 {analyzing
-                  ? "Analyzing Image..."
+                  ? "Analyzing..."
                   : loading
                   ? "Uploading..."
-                  : "Upload Image"}
+                  : "Upload"}
               </label>
               {error && <div className="text-red-500 mt-2">{error}</div>}
             </div>
@@ -493,7 +493,7 @@ const handleMessage = async (input, type = 'text') => {
 </div>
 
             <div className="mt-8">
-              <h2 className="text-xl font-bold mb-2">Gene Expression</h2>
+              <h2 className="text-xl font-bold mb-2">Output</h2>
               <input
                 type="file"
                 accept=".csv,.tsv,.txt"
@@ -508,8 +508,8 @@ const handleMessage = async (input, type = 'text') => {
                 {analyzing
                   ? "Analyzing Data..."
                   : loading
-                  ? "Uploading..."
-                  : "Upload Data"}
+                  ? "Downloading..."
+                  : "Download"}
               </label>
               {data.length > 0 && (
                 <div className="mt-4">
@@ -683,7 +683,7 @@ const handleMessage = async (input, type = 'text') => {
             onClick={handleAnalyzeWithAI}
             className="bg-[#6366f1] text-white px-6 py-3 rounded-full shadow-lg hover:bg-[#4f46e5] transition-all transform hover:scale-105 flex items-center justify-center"
           >
-            <span className="mr-2">Analyze with AI</span>
+            <span className="mr-2">Explore AI models</span>
             <i className="fas fa-robot"></i>
           </button>
         </div>
