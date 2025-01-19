@@ -1,14 +1,15 @@
-from segment_anything import sam_model_registry
-import numpy as np
-import matplotlib.pyplot as plt
-import os
+import argparse
+from pathlib import Path
 
-join = os.path.join
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
+import torch.nn.functional as F
 from segment_anything import sam_model_registry
 from skimage import io, transform
-import torch.nn.functional as F
-import argparse
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 def show_mask(mask, ax, random_color=False):
     if random_color:
@@ -60,77 +61,102 @@ def medsam_inference(medsam_model, img_embed, box_1024, H, W):
     return medsam_seg
 
 
-# %% load model and image
-parser = argparse.ArgumentParser(
-    description="run inference on testing set based on MedSAM"
-)
-parser.add_argument(
-    "-i",
-    "--data_path",
-    type=str,
-    default="/data/demo_database/tcga3.png",
-    help="path to the data folder",
-)
-parser.add_argument(
-    "-o",
-    "--seg_path",
-    type=str,
-    default="assets/",
-    help="path to the segmentation folder",
-)
-parser.add_argument(
-    "--box",
-    type=str,
-    default='[256,0, 450, 200]',
-    help="bounding box of the segmentation target",
-)
-parser.add_argument("--device", type=str, default="cuda:0", help="device")
-parser.add_argument(
-    "-chk",
-    "--checkpoint",
-    type=str,
-    default="/data/models/medsam_vit_b.pth",
-    help="path to the trained model",
-)
-args = parser.parse_args()
+def main():
+    # %% load model and image
+    parser = argparse.ArgumentParser(
+        description="run inference on testing set based on MedSAM"
+    )
+    parser.add_argument(
+        "-i",
+        "--file_path",
+        type=str,
+        default="/data/demo_database/tcga3.png",
+        help="path to the data folder",
+    )
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        type=str,
+        default="assets/",
+        help="path to the segmentation folder",
+    )
+    parser.add_argument(
+        "--box",
+        type=str,
+        default="[256,0, 450, 200]",
+        help="bounding box of the segmentation target",
+    )
+    parser.add_argument(
+        "-chk",
+        "--checkpoint",
+        type=str,
+        default="/data/models/medsam_vit_b.pth",
+        help="path to the trained model",
+    )
+    args = parser.parse_args()
 
-device = args.device
-medsam_model = sam_model_registry["vit_b"](checkpoint=args.checkpoint)
-medsam_model = medsam_model.to(device)
-medsam_model.eval()
+    load_and_segment(
+        file_path=args.file_path,
+        output_dir=args.output_dir,
+        box=args.box,
+        checkpoint=args.checkpoint,
+    )
 
-img_np = io.imread(args.data_path)
-if len(img_np.shape) == 2:
-    img_3c = np.repeat(img_np[:, :, None], 3, axis=-1)
-else:
-    img_3c = img_np
-H, W, _ = img_3c.shape
-# %% image preprocessing
-img_1024 = transform.resize(
-    img_3c, (1024, 1024), order=3, preserve_range=True, anti_aliasing=True
-).astype(np.uint8)
-img_1024 = (img_1024 - img_1024.min()) / np.clip(
-    img_1024.max() - img_1024.min(), a_min=1e-8, a_max=None
-)  # normalize to [0, 1], (H, W, 3)
-# convert the shape to (3, H, W)
-img_1024_tensor = (
-    torch.tensor(img_1024).float().permute(2, 0, 1).unsqueeze(0).to(device)
-)
 
-box_np = np.array([[int(x) for x in args.box[1:-1].split(',')]]) 
-# transfer box_np t0 1024x1024 scale
-box_1024 = box_np / np.array([W, H, W, H]) * 1024
-with torch.no_grad():
-    image_embedding = medsam_model.image_encoder(img_1024_tensor)  # (1, 256, 64, 64)
+def load_and_segment(
+    file_path: str,
+    output_dir: str,
+    box: str = "[256,0, 450, 200]",
+    checkpoint: str = "/data/models/medsam_vit_b.pth",
+):
+    medsam_model = sam_model_registry["vit_b"](checkpoint=checkpoint)
+    medsam_model = medsam_model.to(DEVICE)
+    medsam_model.eval()
 
-medsam_seg = medsam_inference(medsam_model, image_embedding, box_1024, H, W)
+    img_np = io.imread(file_path)
+    if len(img_np.shape) == 2:
+        img_3c = np.repeat(img_np[:, :, None], 3, axis=-1)
+    else:
+        img_3c = img_np
+    H, W, _ = img_3c.shape
+    # %% image preprocessing
+    img_1024 = transform.resize(
+        img_3c, (1024, 1024), order=3, preserve_range=True, anti_aliasing=True
+    ).astype(np.uint8)
+    img_1024 = (img_1024 - img_1024.min()) / np.clip(
+        img_1024.max() - img_1024.min(), a_min=1e-8, a_max=None
+    )  # normalize to [0, 1], (H, W, 3)
+    # convert the shape to (3, H, W)
+    img_1024_tensor = (
+        torch.tensor(img_1024).float().permute(2, 0, 1).unsqueeze(0).to(DEVICE)
+    )
 
-# %% visualize results
-fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-ax.imshow(img_3c)
-ax.axis("off")
-show_mask(medsam_seg, ax)
-show_box(box_np[0], ax)
-plt.tight_layout()
-plt.savefig(join(args.seg_path, "segmented_image.png"))
-plt.show()
+    box_np = np.array([[int(x) for x in box[1:-1].split(",")]])
+    # transfer box_np t0 1024x1024 scale
+    box_1024 = box_np / np.array([W, H, W, H]) * 1024
+    with torch.no_grad():
+        image_embedding = medsam_model.image_encoder(
+            img_1024_tensor
+        )  # (1, 256, 64, 64)
+
+    medsam_seg = medsam_inference(medsam_model, image_embedding, box_1024, H, W)
+
+    # %% visualize results
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    ax.imshow(img_3c)
+    ax.axis("off")
+    show_mask(medsam_seg, ax)
+    show_box(box_np[0], ax)
+    plt.tight_layout()
+    output_path = Path(output_dir) / f"{Path(file_path).stem}_segmented.png"
+
+    if output_path.exists():
+        output_path.unlink()
+    plt.savefig(output_path)
+    # plt.show()
+
+    return output_path
+
+
+if __name__ == "__main__":
+    main()
