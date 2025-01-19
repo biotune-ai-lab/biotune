@@ -1,7 +1,8 @@
 # biotune.ai
 --- Built during AI x Cancer Hack - Jan 2025, Cambridge, United Kingdom ---
 
-Team:
+## Team
+
 Ananya Bhalla - [GitHub](https://github.com/AnanyaBhalla), [LinkedIn](https://www.linkedin.com/in/ananyabhalla/)
 
 Ellen Schrader - [GitHub](https://github.com/ellen-schrader), [LinkedIn](https://www.linkedin.com/in/ellen-schrader/)
