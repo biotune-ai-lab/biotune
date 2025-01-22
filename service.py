@@ -28,27 +28,27 @@ app.add_middleware(
 )
 
 # MinIO services
-@app.get("/{bucket_name}")
+@app.get("/bucket/{bucket_name}")
 async def list_files(bucket_name: str):
     return await minio_api.list_files(bucket_name)
 
-@app.post("/{bucket_name}/upload")
+@app.post("/bucket/{bucket_name}/upload")
 async def upload_file(bucket_name: str, file: UploadFile):
     return await minio_api.upload_file(bucket_name, file)
 
-@app.get("/{bucket_name}/download/{filename}")
+@app.get("/bucket/{bucket_name}/download/{filename}")
 async def download_file(bucket_name: str, filename: str):
     return await minio_api.download_file(bucket_name, filename)
 
-@app.delete("/{bucket_name}/delete/{filename}")
+@app.delete("/bucket/{bucket_name}/delete/{filename}")
 async def delete_file(bucket_name: str, filename: str):
     return await minio_api.delete_file(bucket_name, filename)
 
-@app.post("/create/{bucket_name}")
+@app.post("/bucket/create/{bucket_name}")
 async def create_bucket(bucket_name: str):
     return await minio_api.create_bucket(bucket_name)
 
-@app.delete("/delete/{bucket_name}")
+@app.delete("/bucket/delete/{bucket_name}")
 async def delete_bucket(bucket_name: str):
     return await minio_api.delete_bucket(bucket_name)
 

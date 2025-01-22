@@ -19,11 +19,12 @@ class MinioApi:
             if not self.client.bucket_exists(bucket_name):
                 return {"error": f"Bucket '{bucket_name}' does not exist"}
             
-            objects = self.client.list_objects_v2(bucket_name)
+            objects = self.client.list_objects(bucket_name)
+            
             files = [{
                 "name": obj.object_name,
                 "size": obj.size,
-                "last_modified": obj.last_modified.isoformat()
+                "last_modified": obj.last_modified.isoformat() if obj.last_modified else None
             } for obj in objects]
             
             return {
