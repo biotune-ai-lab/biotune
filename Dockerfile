@@ -13,7 +13,7 @@ RUN apt-get update && \
 
 ENV PATH="/root/.local/bin/:$PATH"
 
-COPY service.py .python-version pyproject.toml uv.lock /app/
+COPY .env .python-version service.py pyproject.toml uv.lock /app/
 
 RUN uv sync
 
