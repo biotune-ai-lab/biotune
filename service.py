@@ -4,7 +4,6 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional, Union, Dict, Any
 import re
-from dotenv import load_dotenv
 import os
 from openai import OpenAI
 import shutil
@@ -12,48 +11,13 @@ from pathlib import Path
 from datetime import datetime
 import base64
 import requests
-from minio import Minio
-from minio.error import S3Error
+from minio_api import MinioApi
+from config import config
 
 # Initialize the FastAPI app
 app = FastAPI()
-
-# Load environment variables
-load_dotenv()
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
-
-IMAGE_PATH = os.getenv("IMAGE_PATH", "./data/tmp")  # Make endpoint configurable
-CONCH_ENDPOINT = os.getenv("CONCH_ENDPOINT", "http://127.0.0.1:54001")
-VIRCHOW_ENDPOINT = os.getenv("VIRCHOW_ENDPOINT", "http://127.0.0.1:54002") 
-MEDSAM_ENDPOINT = os.getenv("MEDSAM_ENDPOINT", "http://127.0.0.1:54003")  
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://127.0.0.1:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-
-# Initialize MinIO client
-minio_client = Minio(
-    MINIO_ENDPOINT,
-    access_key=MINIO_ACCESS_KEY,
-    secret_key=MINIO_SECRET_KEY,
-    secure=False  # Set to True if using HTTPS
-)
-
-@app.get("/list/{bucket_name}")
-async def list_files(bucket_name: str):
-    try:
-        objects = minio_client.list_objects(bucket_name)
-        files = [obj.object_name for obj in objects]
-        return {"files": files}
-    except S3Error as e:
-        return {"error": f"Error listing files: {str(e)}"}
-
-# Create and mount uploads directory
-UPLOAD_DIR = Path(IMAGE_PATH)
-UPLOAD_DIR.mkdir(exist_ok=True)
-app.mount("/data/tmp", StaticFiles(directory=IMAGE_PATH), name=IMAGE_PATH)
+minio_api = MinioAPI()
+client = OpenAI(api_key=config["OPENAI_API_KEY"])
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,7 +27,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# MinIO services
+@app.get("/{bucket_name}")
+async def list_files(bucket_name: str):
+    return await minio_api.list_files(bucket_name)
+
+@app.post("/{bucket_name}/upload")
+async def upload_file(bucket_name: str, file: UploadFile):
+    return await minio_api.upload_file(bucket_name, file)
+
+@app.get("/{bucket_name}/download/{filename}")
+async def download_file(bucket_name: str, filename: str):
+    return await minio_api.download_file(bucket_name, filename)
+
+@app.delete("/{bucket_name}/delete/{filename}")
+async def delete_file(bucket_name: str, filename: str):
+    return await minio_api.delete_file(bucket_name, filename)
+
+@app.post("/create/{bucket_name}")
+async def create_bucket(bucket_name: str):
+    return await minio_api.create_bucket(bucket_name)
+
+@app.delete("/delete/{bucket_name}")
+async def delete_bucket(bucket_name: str):
+    return await minio_api.delete_bucket(bucket_name)
 
 # Request models
 class ImageUrl(BaseModel):
@@ -129,7 +116,7 @@ def get_cancer_subtype(image_path: str) -> str:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        response = requests.get(f"{CONCH_ENDPOINT}/process/{filename}", 
+        response = requests.get(f"{config["CONCH_ENDPOINT"]}/process/{filename}", 
                               headers={"accept": "application/json"})
         
         if response.status_code != 200:
@@ -146,7 +133,7 @@ def get_best_image(image_path: str) -> str:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        response = requests.get(f"{VIRCHOW_ENDPOINT}/process/{filename}", 
+        response = requests.get(f"{config["VIRCHOW_ENDPOINT"]}/process/{filename}", 
                               headers={"accept": "application/json"})
         
         if response.status_code != 200:
@@ -162,10 +149,10 @@ def get_segmentation_run(image_path: str) -> str:
     try:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
-        DOWNLOAD_PATH=f"{MINIO_ENDPOINT}/{Path(filename).stem}_segmented.png"
+        #DOWNLOAD_PATH=f"{config["MINIO_ENDPOINT"]}/images/medsam_segmented/{Path(filename).stem}_segmented.png"
         
         # Make request to your model endpoint
-        response = requests.get(f"{MEDSAM_ENDPOINT}/process/{filename}", 
+        response = requests.get(f"{config["MEDSAM_ENDPOINT"]}/process/{filename}", 
                               headers={"accept": "application/json"})
         
         if response.status_code != 200:
@@ -191,20 +178,22 @@ async def health_check():
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Handle file uploads"""
+    """Handle file uploads to MinIO storage"""
     try:
-        #timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        #unique_filename = f"{timestamp}_{file.filename}"
-        unique_filename = f"{file.filename}"
-        file_path = UPLOAD_DIR / unique_filename
-
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        # Return the full URL path that will be accessible
-        file_url = f"{IMAGE_PATH}/{unique_filename}"
+        bucket_name = "uploads"  # Default bucket for uploads
+        
+        # Ensure bucket exists
+        await minio_api.create_bucket(bucket_name)
+        
+        # Upload file to MinIO
+        result = await minio_api.upload_file(bucket_name, file)
+        
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+            
+        # Return the file information
         return {
-            "url": file_url,
+            "url": f"/{bucket_name}/download/{file.filename}",  # URL for downloading the file
             "mimeType": file.content_type
         }
     except Exception as e:
@@ -236,23 +225,22 @@ async def chat_endpoint(request: ChatRequest):
                         # Extract filename from URL
                         filename = url_path.split('/')[-1]
                         
-                        # Construct the correct path in /data/tmp
-                        image_path = os.path.join(IMAGE_PATH, filename)
-                        print(f"Attempting to read image from: {image_path}")  # Debug log
-                        
+                        bucket_name = "uploads"
+
                         try:
-                            with open(image_path, "rb") as image_file:
-                                encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
-                                content_parts.append({
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{encoded_image}"
-                                    }
-                                })
-                                # Store original path for function calls
-                                original_path = f"{IMAGE_PATH}/{filename}"
+                            # Get the file from MinIO instead of local filesystem
+                            image_data = minio_api.download_file(bucket_name, filename)
+                            
+                            # Read the data and encode it
+                            encoded_image = base64.b64encode(image_data.read()).decode('utf-8')
+                            content_parts.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{encoded_image}"
+                                }
+                            })
                         except Exception as e:
-                            print(f"Error reading image: {str(e)}")
+                            print(f"Error reading image from MinIO: {str(e)}")
                             raise HTTPException(
                                 status_code=400,
                                 detail=f"Error reading image file: {str(e)}"
