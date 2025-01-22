@@ -5,7 +5,7 @@ import io
 import os
 from config import config
 
-class MinioAPI:
+class MinioApi:
     def __init__(self):
         self.client = Minio(
             endpoint=config["MINIO_ENDPOINT"],

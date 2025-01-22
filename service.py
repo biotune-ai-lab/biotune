@@ -16,7 +16,7 @@ from config import config
 
 # Initialize the FastAPI app
 app = FastAPI()
-minio_api = MinioAPI()
+minio_api = MinioApi()
 client = OpenAI(api_key=config["OPENAI_API_KEY"])
 
 app.add_middleware(
@@ -116,7 +116,7 @@ def get_cancer_subtype(image_path: str) -> str:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        response = requests.get(f"{config["CONCH_ENDPOINT"]}/process/{filename}", 
+        response = requests.get(f"{config['CONCH_ENDPOINT']}/process/{filename}", 
                               headers={"accept": "application/json"})
         
         if response.status_code != 200:
@@ -133,7 +133,7 @@ def get_best_image(image_path: str) -> str:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        response = requests.get(f"{config["VIRCHOW_ENDPOINT"]}/process/{filename}", 
+        response = requests.get(f"{config['VIRCHOW_ENDPOINT']}/process/{filename}", 
                               headers={"accept": "application/json"})
         
         if response.status_code != 200:
@@ -152,7 +152,7 @@ def get_segmentation_run(image_path: str) -> str:
         #DOWNLOAD_PATH=f"{config["MINIO_ENDPOINT"]}/images/medsam_segmented/{Path(filename).stem}_segmented.png"
         
         # Make request to your model endpoint
-        response = requests.get(f"{config["MEDSAM_ENDPOINT"]}/process/{filename}", 
+        response = requests.get(f"{config['MEDSAM_ENDPOINT']}/process/{filename}", 
                               headers={"accept": "application/json"})
         
         if response.status_code != 200:
