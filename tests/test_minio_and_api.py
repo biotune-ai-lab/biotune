@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 async def test_minio_and_api():
     minio_api = None
     try:
-        API_URL = "http://127.0.0.1:8000"  # Using the working URL
+        API_URL = "http://127.0.0.1:8000"  # Backend URL
         
         # Health Check
         logger.info("Testing health check endpoint")
