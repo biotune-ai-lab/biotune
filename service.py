@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -38,7 +38,17 @@ async def upload_file(bucket_name: str, file: UploadFile):
 
 @app.get("/bucket/{bucket_name}/download/{filename}")
 async def download_file(bucket_name: str, filename: str):
-    return await minio_api.download_file(bucket_name, filename)
+    data = await minio_api.download_file(bucket_name, filename)
+    if isinstance(data, dict) and "error" in data:
+        raise HTTPException(status_code=404, detail=data["error"])
+    
+    # Determine content type based on file extension
+    content_type = "image/png" if filename.endswith('.png') else "application/octet-stream"
+    
+    return Response(
+        content=data,
+        media_type=content_type
+    )
 
 @app.delete("/bucket/{bucket_name}/delete/{filename}")
 async def delete_file(bucket_name: str, filename: str):
@@ -47,10 +57,6 @@ async def delete_file(bucket_name: str, filename: str):
 @app.post("/bucket/create/{bucket_name}")
 async def create_bucket(bucket_name: str):
     return await minio_api.create_bucket(bucket_name)
-
-@app.delete("/bucket/delete/{bucket_name}")
-async def delete_bucket(bucket_name: str):
-    return await minio_api.delete_bucket(bucket_name)
 
 # Request models
 class ImageUrl(BaseModel):
@@ -149,7 +155,6 @@ def get_segmentation_run(image_path: str) -> str:
     try:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
-        #DOWNLOAD_PATH=f"{config["MINIO_ENDPOINT"]}/images/medsam_segmented/{Path(filename).stem}_segmented.png"
         
         # Make request to your model endpoint
         response = requests.get(f"{config['MEDSAM_ENDPOINT']}/process/{filename}", 
@@ -191,9 +196,9 @@ async def upload_file(file: UploadFile = File(...)):
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
             
-        # Return the file information
+        # Return the file information with the correct API route
         return {
-            "url": f"/{bucket_name}/download/{file.filename}",  # URL for downloading the file
+            "url": f"/bucket/{bucket_name}/download/{file.filename}",  # Maps to your FastAPI route
             "mimeType": file.content_type
         }
     except Exception as e:
@@ -228,11 +233,10 @@ async def chat_endpoint(request: ChatRequest):
                         bucket_name = "uploads"
 
                         try:
-                            # Get the file from MinIO instead of local filesystem
-                            image_data = minio_api.download_file(bucket_name, filename)
-                            
-                            # Read the data and encode it
-                            encoded_image = base64.b64encode(image_data.read()).decode('utf-8')
+                            image_data = await minio_api.download_file(bucket_name, filename)
+                            if isinstance(image_data, dict) and "error" in image_data:
+                                raise HTTPException(status_code=400, detail=image_data["error"])
+                            encoded_image = base64.b64encode(image_data).decode('utf-8')
                             content_parts.append({
                                 "type": "image_url",
                                 "image_url": {

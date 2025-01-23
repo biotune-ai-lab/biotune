@@ -50,10 +50,11 @@ class MinioApi:
 
     async def download_file(self, bucket_name: str, filename: str):
         try:
-            return self.client.get_object(bucket_name, filename)
+            data = self.client.get_object(bucket_name, filename)
+            return data.read()  # Read the data before returning
         except S3Error as e:
             return {"error": f"Error downloading file: {str(e)}"}
-
+        
     async def delete_file(self, bucket_name: str, filename: str):
         try:
             self.client.remove_object(bucket_name, filename)
