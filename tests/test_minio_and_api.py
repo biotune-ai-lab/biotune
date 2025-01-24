@@ -1,10 +1,12 @@
 import asyncio
 import logging
-from minio_api import MinioApi
 import requests
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
+# Add the parent directory to Python path
+sys.path.append(str(Path(__file__).parent.parent))
+from minio_api import MinioApi
 
 logging.basicConfig(
     level=logging.INFO,

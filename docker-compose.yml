@@ -1,9 +1,0 @@
-services:
-  biotune:
-    image: biotune
-    ports:
-      - "8000:8000"  # For accessing container from host
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # For accessing host from container
-    env_file:
-      - .env.docker
