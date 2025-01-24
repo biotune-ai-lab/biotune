@@ -1,3 +1,2 @@
-.env
-.env.docker
-ssh
+.env*
+__pycache__/

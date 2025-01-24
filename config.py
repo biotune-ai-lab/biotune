@@ -18,6 +18,7 @@ def load_config():
     config = {
         "ENVIRONMENT": env,
         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+        "CONCH_ENDPOINT": os.getenv("CONCH_ENDPOINT", "http://127.0.0.1:54001"), 
         "VIRCHOW_ENDPOINT": os.getenv("VIRCHOW_ENDPOINT", "http://127.0.0.1:54002"), 
         "MEDSAM_ENDPOINT": os.getenv("MEDSAM_ENDPOINT", "http://127.0.0.1:54003"),  
         "MINIO_ENDPOINT": os.getenv("MINIO_ENDPOINT", "http://127.0.0.1:9000"),

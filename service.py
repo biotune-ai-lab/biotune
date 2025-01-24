@@ -122,7 +122,7 @@ def get_cancer_subtype(image_path: str) -> str:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        response = requests.get(f"{config['CONCH_ENDPOINT']}/process/{filename}", 
+        response = requests.get(f"{config['CONCH_ENDPOINT']}/process/minio/uploads/{filename}", 
                               headers={"accept": "application/json"})
         
         if response.status_code != 200:
