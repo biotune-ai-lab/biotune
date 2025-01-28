@@ -1,6 +1,6 @@
 services:
-  biotune:
-    image: biotune
+  biotune-ai:
+    image: biotune-ai
     ports:
       - "8000:8000"  # For accessing container from host
     extra_hosts:
