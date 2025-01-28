@@ -1,14 +1,10 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union, Dict
 import re
 import os
 from openai import OpenAI
-import shutil
-from pathlib import Path
-from datetime import datetime
 import base64
 import requests
 from minio_api import MinioApi
