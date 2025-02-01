@@ -2,9 +2,8 @@
 
 ## 1. setup environement variables
 
-refer to `examples/` - you will need to create `.env` (and `.env.docker` if you are using Docker) and place them in the root of the project folder. 
-
-tip: copy-paste the existing example files, remove the .example at then end, and add the correct variables per your configuration
+1. copy-paste the .env files in `examples/` and place them in the root of the project folder
+2. remove the .example at then end (`.env` and `.env.docker` if you are using Docker)
 
 ## 2a. set up and run the service locally
 
@@ -47,6 +46,8 @@ docker compose up
 ```
 
 ## 3. run the other services
+
+clone frontend from https://github.com/IshanG97/biotune-ai-create
 
 refer to the repo pages and setup accordingly
 
