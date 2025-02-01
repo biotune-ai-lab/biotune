@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: biotune-ai # this marks the DNS e.g. http://biotune-ai.local
+spec:
+  type: ClusterIP  # Change from ClusterIP to LoadBalancer if we are not using nginx
+  ports:
+    - name: "8000"
+      port: 8000
+      targetPort: 8000
+  selector:
+    io.kompose.service: biotune-ai
