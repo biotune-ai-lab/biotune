@@ -2,13 +2,13 @@
 
 ## 1. setup environement variables
 
-refer to `examples/` - you will need to create `.env` (and `.env.docker` if you are using Docker) and place them in the root of the project folder. 
+refer to `examples/` - you will need to create `.env` (and `.env.docker` if you are using Docker) and place them in the root of the project folder.
 
 tip: copy-paste the existing example files, remove the .example at then end, and add the correct variables per your configuration
 
 ## 2a. set up and run the service locally
 
-uses variables stored in `.env` 
+uses variables stored in `.env`
 
 set up a dedicated virtual environment to run the service
 ```bash
