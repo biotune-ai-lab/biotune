@@ -2,8 +2,8 @@
 
 ## 1. setup environement variables
 
-1. copy-paste the files in `examples/` and place them in the root of the project folder
-2. remove the .example at then end (`.env` and `.env.docker` if you are using Docker)
+for `.env` files with `.example` at then, remove the `.example` from the filename
+- e.g. `.env.docker.example` ---> `.env.docker`
 
 ## 2a. set up and run the service locally
 
