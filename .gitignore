@@ -1,2 +1,8 @@
-.env*
+.env
+.env.docker
+.env.kube
+k8s/kubectl
+k8s/config_map.yaml
+k8s/cluster_issuer.yaml
+ca.crt
 __pycache__/
