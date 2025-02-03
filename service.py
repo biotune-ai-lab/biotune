@@ -6,13 +6,12 @@ import re
 import os
 from openai import OpenAI
 import base64
-import requests
-from minio_api import MinioApi
+import httpx
 from config import config
+import mimetypes
 
 # Initialize the FastAPI app
 app = FastAPI()
-minio_api = MinioApi()
 client = OpenAI(api_key=config["OPENAI_API_KEY"])
 
 app.add_middleware(
@@ -26,33 +25,136 @@ app.add_middleware(
 # MinIO services
 @app.get("/bucket/{bucket_name}")
 async def list_files(bucket_name: str):
-    return await minio_api.list_files(bucket_name)
+    # Assuming you have defined OBJECT_STORAGE_API in your config/environment
+    storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}"
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(storage_api_url)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        return response.json()
 
 @app.post("/bucket/{bucket_name}/upload")
-async def upload_file(bucket_name: str, file: UploadFile):
-    return await minio_api.upload_file(bucket_name, file)
+async def upload_file(bucket_name: str, file: UploadFile = File(...)):
+    try:
+        # Debug log what we received
+        print(f"Received file upload request for bucket: {bucket_name}")
+        print(f"File details - name: {file.filename}, type: {file.content_type}")
+        
+        storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/upload"
+        print(f"Forwarding to storage API: {storage_api_url}")
+        
+        # Read the file content
+        file_content = await file.read()
+        print(f"Read {len(file_content)} bytes from uploaded file")
+        
+        # Prepare the file for the storage API
+        files = {
+            "file": (
+                file.filename,         
+                file_content,          
+                file.content_type      
+            )
+        }
 
+        print(f"Filename: {file.filename}")
+        
+        # Send to storage API
+        async with httpx.AsyncClient() as client:
+            print("Sending to storage API...")
+            response = await client.post(storage_api_url, files=files)
+            print(f"Storage API response status: {response.status_code}")
+            
+            # Make sure the storage API request was successful
+            response.raise_for_status()
+            
+            # Return consistent response format
+            return {
+                "message": "File uploaded successfully",
+                "url": f"/bucket/{bucket_name}/download/{file.filename}",  # Backend reference URL
+                "mimeType": file.content_type
+            }
+            
+    except httpx.HTTPError as exc:
+        error_msg = f"Storage API error: {str(exc)}"
+        print(f"Error: {error_msg}")
+        status_code = exc.response.status_code if hasattr(exc, 'response') else 500
+        raise HTTPException(status_code=status_code, detail=error_msg)
+        
+    except Exception as e:
+        error_msg = f"Unexpected error during upload: {str(e)}"
+        print(f"Error: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+    
 @app.get("/bucket/{bucket_name}/download/{filename}")
 async def download_file(bucket_name: str, filename: str):
-    data = await minio_api.download_file(bucket_name, filename)
-    if isinstance(data, dict) and "error" in data:
-        raise HTTPException(status_code=404, detail=data["error"])
+    storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/download/{filename}"
     
-    # Determine content type based on file extension
-    content_type = "image/png" if filename.endswith('.png') else "application/octet-stream"
-    
-    return Response(
-        content=data,
-        media_type=content_type
-    )
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(storage_api_url)
+            response.raise_for_status()
+
+            # Handle content type here
+            content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+            
+            return Response(
+                content=response.content,
+                media_type=content_type,
+                headers={"Content-Disposition": f"inline; filename={filename}"}
+            )
+            
+    except httpx.HTTPError as exc:
+        if hasattr(exc, 'response') and exc.response.status_code == 404:
+            raise HTTPException(status_code=404, detail=f"File {filename} not found")
+        
+        status_code = exc.response.status_code if hasattr(exc, 'response') else 500
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"Storage service error: {str(exc)}"
+        )
 
 @app.delete("/bucket/{bucket_name}/delete/{filename}")
 async def delete_file(bucket_name: str, filename: str):
-    return await minio_api.delete_file(bucket_name, filename)
+    storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/delete/{filename}"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(storage_api_url)
+            response.raise_for_status()
+            return response.json()
+            
+    except httpx.HTTPError as exc:
+        if hasattr(exc, 'response') and exc.response.status_code == 404:
+            raise HTTPException(status_code=404, detail=f"File {filename} not found")
+            
+        status_code = exc.response.status_code if hasattr(exc, 'response') else 500
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"Storage service error: {str(exc)}"
+        )
 
 @app.post("/bucket/create/{bucket_name}")
 async def create_bucket(bucket_name: str):
-    return await minio_api.create_bucket(bucket_name)
+    storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/create/{bucket_name}"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(storage_api_url)
+            response.raise_for_status()
+            return response.json()
+            
+    except httpx.HTTPError as exc:
+        if hasattr(exc, 'response') and exc.response.status_code == 409:
+            raise HTTPException(
+                status_code=409, 
+                detail=f"Bucket {bucket_name} already exists"
+            )
+            
+        status_code = exc.response.status_code if hasattr(exc, 'response') else 500
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"Storage service error: {str(exc)}"
+        )
 
 # Request models
 class ImageUrl(BaseModel):
@@ -112,15 +214,18 @@ def parse_llm_response(response: str) -> tuple[Optional[str], Optional[str]]:
         return function_name, arguments
     return None, None
 
-def get_cancer_subtype(image_path: str) -> str:
+async def get_cancer_subtype(image_path: str) -> str:
     """Classify cancer subtype from an image."""
     try:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        response = requests.get(f"{config['CONCH_ENDPOINT']}/process/minio/uploads/{filename}", 
-                              headers={"accept": "application/json"})
-        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{config['CONCH_ENDPOINT']}/process/minio/uploads/{filename}",
+                headers={"accept": "application/json"}
+            )
+
         if response.status_code != 200:
             return f"Error: Failed to get prediction for {filename}"
             
@@ -129,15 +234,18 @@ def get_cancer_subtype(image_path: str) -> str:
     except Exception as e:
         return f"Error analyzing image: {str(e)}"
 
-def get_best_image(image_path: str) -> str:
+async def get_best_image(image_path: str) -> str:
     """Get image that most closely matches uploaded images."""
     try:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        response = requests.get(f"{config['VIRCHOW_ENDPOINT']}/process/{filename}", 
-                              headers={"accept": "application/json"})
-        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{config['VIRCHOW_ENDPOINT']}/process/{filename}",
+                headers={"accept": "application/json"}
+            )
+
         if response.status_code != 200:
             return f"Error: Failed to get prediction for {filename}"
             
@@ -146,16 +254,18 @@ def get_best_image(image_path: str) -> str:
     except Exception as e:
         return f"Error analyzing image: {str(e)}"
 
-def get_segmentation_run(image_path: str) -> str:
+async def get_segmentation_run(image_path: str) -> str:
     """Get image that most closely matches uploaded images."""
     try:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         
         # Make request to your model endpoint
-        response = requests.get(f"{config['MEDSAM_ENDPOINT']}/process/{filename}", 
-                              headers={"accept": "application/json"})
-        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{config['MEDSAM_ENDPOINT']}/process/{filename}",
+                headers={"accept": "application/json"}
+            )
         if response.status_code != 200:
             return f"Error: Failed to get prediction for {filename}"
             
@@ -176,29 +286,6 @@ function_map = {
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "model": "gpt-4o"}
-
-@app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Handle file uploads to MinIO storage"""
-    try:
-        bucket_name = "uploads"  # Default bucket for uploads
-        
-        # Ensure bucket exists
-        await minio_api.create_bucket(bucket_name)
-        
-        # Upload file to MinIO
-        result = await minio_api.upload_file(bucket_name, file)
-        
-        if "error" in result:
-            raise HTTPException(status_code=500, detail=result["error"])
-            
-        # Return the file information with the correct API route
-        return {
-            "url": f"/bucket/{bucket_name}/download/{file.filename}",  # Maps to your FastAPI route
-            "mimeType": file.content_type
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -229,9 +316,10 @@ async def chat_endpoint(request: ChatRequest):
                         bucket_name = "uploads"
 
                         try:
-                            image_data = await minio_api.download_file(bucket_name, filename)
-                            if isinstance(image_data, dict) and "error" in image_data:
-                                raise HTTPException(status_code=400, detail=image_data["error"])
+                            response = await download_file(bucket_name, filename)
+                            if isinstance(response, dict) and "error" in response:
+                                raise HTTPException(status_code=400, detail=response["error"])
+                            image_data = response.body
                             encoded_image = base64.b64encode(image_data).decode('utf-8')
                             content_parts.append({
                                 "type": "image_url",

@@ -1,6 +1,6 @@
 # biotune.ai
 
-## 1. setup environement variables
+## 1. setup environment variables
 
 for `.env` files with `.example` at then, remove the `.example` from the filename
 - e.g. `.env.docker.example` ---> `.env.docker`
