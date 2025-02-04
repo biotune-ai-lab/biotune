@@ -13,7 +13,7 @@ RUN apt-get update && \
 
 ENV PATH="/root/.local/bin/:$PATH"
 
-COPY .python-version config.py minio_api.py service.py pyproject.toml uv.lock /app/
+COPY .python-version config.py service.py pyproject.toml uv.lock /app/
 
 RUN uv sync
 

@@ -1,14 +1,12 @@
 # biotune.ai
 
-## 1. setup environement variables
 
-refer to `examples/` - you will need to create `.env` (and `.env.docker` if you are using Docker) and place them in the root of the project folder.
+## 1a. set up and run the service locally
 
-tip: copy-paste the existing example files, remove the .example at then end, and add the correct variables per your configuration
-
-## 2a. set up and run the service locally
-
-uses variables stored in `.env`
+create `.env` file from template; update environment variable values if needed
+```bash
+cp .env.example .env
+```
 
 set up a dedicated virtual environment to run the service
 ```bash
@@ -28,13 +26,15 @@ uv run fastapi dev --host 127.0.0.1 --port 8000 service.py
 
 # production
 uv run uvicorn service:app --host 127.0.0.1 --port 8000
-# OR
-uv run fastapi run --host 127.0.0.1 --port 8000 service.py
 ```
 
-## 2b. run in a Docker container
 
-uses variables stored in `.env.docker`
+## 1b. run service in a Docker container
+
+create `.env.docker` file from template; update environment variable values if needed
+```bash
+cp .env.docker.example .env.docker
+```
 
 build the Docker image
 ```bash
@@ -46,7 +46,10 @@ run the Docker container service
 docker compose up
 ```
 
-## 3. run the other services
+
+## 2. run the other services
+
+clone frontend from https://github.com/IshanG97/biotune-ai-create
 
 refer to the repo pages and setup accordingly
 
