@@ -1,14 +1,16 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Response
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional, Union, Dict
-import re
-import os
-from openai import OpenAI
 import base64
-import httpx
-from config import config
 import mimetypes
+import os
+import re
+from typing import Dict, List, Optional, Union
+
+import httpx
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
+from pydantic import BaseModel
+
+from config import config
 
 # Initialize the FastAPI app
 app = FastAPI()
@@ -22,16 +24,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # MinIO services
 @app.get("/bucket/{bucket_name}")
 async def list_files(bucket_name: str):
     # Assuming you have defined OBJECT_STORAGE_API in your config/environment
     storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}"
-    
+
     async with httpx.AsyncClient() as client:
         response = await client.get(storage_api_url)
         response.raise_for_status()  # Raise an exception for bad status codes
         return response.json()
+
 
 @app.post("/bucket/{bucket_name}/upload")
 async def upload_file(bucket_name: str, file: UploadFile = File(...)):
@@ -39,142 +43,147 @@ async def upload_file(bucket_name: str, file: UploadFile = File(...)):
         # Debug log what we received
         print(f"Received file upload request for bucket: {bucket_name}")
         print(f"File details - name: {file.filename}, type: {file.content_type}")
-        
+
         storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/upload"
         print(f"Forwarding to storage API: {storage_api_url}")
-        
+
         # Read the file content
         file_content = await file.read()
         print(f"Read {len(file_content)} bytes from uploaded file")
-        
+
         # Prepare the file for the storage API
-        files = {
-            "file": (
-                file.filename,         
-                file_content,          
-                file.content_type      
-            )
-        }
+        files = {"file": (file.filename, file_content, file.content_type)}
 
         print(f"Filename: {file.filename}")
-        
+
         # Send to storage API
         async with httpx.AsyncClient() as client:
             print("Sending to storage API...")
             response = await client.post(storage_api_url, files=files)
             print(f"Storage API response status: {response.status_code}")
-            
+
             # Make sure the storage API request was successful
             response.raise_for_status()
-            
+
             # Return consistent response format
             return {
                 "message": "File uploaded successfully",
                 "url": f"/bucket/{bucket_name}/download/{file.filename}",  # Backend reference URL
-                "mimeType": file.content_type
+                "mimeType": file.content_type,
             }
-            
+
     except httpx.HTTPError as exc:
         error_msg = f"Storage API error: {str(exc)}"
         print(f"Error: {error_msg}")
-        status_code = exc.response.status_code if hasattr(exc, 'response') else 500
+        status_code = exc.response.status_code if hasattr(exc, "response") else 500
         raise HTTPException(status_code=status_code, detail=error_msg)
-        
+
     except Exception as e:
         error_msg = f"Unexpected error during upload: {str(e)}"
         print(f"Error: {error_msg}")
         raise HTTPException(status_code=500, detail=error_msg)
-    
+
+
 @app.get("/bucket/{bucket_name}/download/{filename}")
 async def download_file(bucket_name: str, filename: str):
-    storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/download/{filename}"
-    
+    storage_api_url = (
+        f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/download/{filename}"
+    )
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(storage_api_url)
             response.raise_for_status()
 
             # Handle content type here
-            content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-            
+            content_type = (
+                mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            )
+
             return Response(
                 content=response.content,
                 media_type=content_type,
-                headers={"Content-Disposition": f"inline; filename={filename}"}
+                headers={"Content-Disposition": f"inline; filename={filename}"},
             )
-            
+
     except httpx.HTTPError as exc:
-        if hasattr(exc, 'response') and exc.response.status_code == 404:
+        if hasattr(exc, "response") and exc.response.status_code == 404:
             raise HTTPException(status_code=404, detail=f"File {filename} not found")
-        
-        status_code = exc.response.status_code if hasattr(exc, 'response') else 500
+
+        status_code = exc.response.status_code if hasattr(exc, "response") else 500
         raise HTTPException(
-            status_code=status_code,
-            detail=f"Storage service error: {str(exc)}"
+            status_code=status_code, detail=f"Storage service error: {str(exc)}"
         )
+
 
 @app.delete("/bucket/{bucket_name}/delete/{filename}")
 async def delete_file(bucket_name: str, filename: str):
-    storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/delete/{filename}"
-    
+    storage_api_url = (
+        f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/delete/{filename}"
+    )
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(storage_api_url)
             response.raise_for_status()
             return response.json()
-            
+
     except httpx.HTTPError as exc:
-        if hasattr(exc, 'response') and exc.response.status_code == 404:
+        if hasattr(exc, "response") and exc.response.status_code == 404:
             raise HTTPException(status_code=404, detail=f"File {filename} not found")
-            
-        status_code = exc.response.status_code if hasattr(exc, 'response') else 500
+
+        status_code = exc.response.status_code if hasattr(exc, "response") else 500
         raise HTTPException(
-            status_code=status_code,
-            detail=f"Storage service error: {str(exc)}"
+            status_code=status_code, detail=f"Storage service error: {str(exc)}"
         )
+
 
 @app.post("/bucket/create/{bucket_name}")
 async def create_bucket(bucket_name: str):
     storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/create/{bucket_name}"
-    
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(storage_api_url)
             response.raise_for_status()
             return response.json()
-            
+
     except httpx.HTTPError as exc:
-        if hasattr(exc, 'response') and exc.response.status_code == 409:
+        if hasattr(exc, "response") and exc.response.status_code == 409:
             raise HTTPException(
-                status_code=409, 
-                detail=f"Bucket {bucket_name} already exists"
+                status_code=409, detail=f"Bucket {bucket_name} already exists"
             )
-            
-        status_code = exc.response.status_code if hasattr(exc, 'response') else 500
+
+        status_code = exc.response.status_code if hasattr(exc, "response") else 500
         raise HTTPException(
-            status_code=status_code,
-            detail=f"Storage service error: {str(exc)}"
+            status_code=status_code, detail=f"Storage service error: {str(exc)}"
         )
+
 
 # Request models
 class ImageUrl(BaseModel):
     url: str
+
 
 class ContentItem(BaseModel):
     type: str
     text: Optional[str] = None
     image_url: Optional[Dict[str, str]] = None
 
+
 class Message(BaseModel):
     role: str
     content: Union[str, List[ContentItem]]
 
+
 class ChatRequest(BaseModel):
     messages: List[Message]
+
 
 class FunctionRequest(BaseModel):
     function_name: str
     arguments: List[str]
+
 
 # System prompt template
 PROMPT_TEMPLATE = """
@@ -188,22 +197,23 @@ Available functions:
 
 If the user asks you for further assistance or evaluation or task, determine if a function should be called, with an output in the format:
 "function_name, argument"
-Examples: 
+Examples:
 "get_cancer_subtype, tcga_10.png"
 
 We only have three filenames, tcga_10.png, tcga_11.png, tcga_20.png
 """
+
 
 def parse_llm_response(response: str) -> tuple[Optional[str], Optional[str]]:
     """Parse the LLM response to identify function calls and arguments."""
     # Clean the response
     response = response.strip()
     # Remove userStyle tags
-    response = re.sub(r'<userStyle>.*?</userStyle>', '', response)
+    response = re.sub(r"<userStyle>.*?</userStyle>", "", response)
     # Remove any quotes
-    response = response.replace('"', '')
+    response = response.replace('"', "")
     response = response.strip()
-    
+
     print(f"Cleaned response: {response}")  # Debug log
     pattern = r"^(\w+)\s*,\s*(.+)$"
     match = re.match(pattern, response)
@@ -214,6 +224,7 @@ def parse_llm_response(response: str) -> tuple[Optional[str], Optional[str]]:
         return function_name, arguments
     return None, None
 
+
 async def get_cancer_subtype(image_path: str) -> str:
     """Classify cancer subtype from an image."""
     try:
@@ -223,16 +234,17 @@ async def get_cancer_subtype(image_path: str) -> str:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{config['CONCH_ENDPOINT']}/process/minio/uploads/{filename}",
-                headers={"accept": "application/json"}
+                headers={"accept": "application/json"},
             )
 
         if response.status_code != 200:
             return f"Error: Failed to get prediction for {filename}"
-            
+
         return response.text
-        
+
     except Exception as e:
         return f"Error analyzing image: {str(e)}"
+
 
 async def get_best_image(image_path: str) -> str:
     """Get image that most closely matches uploaded images."""
@@ -243,37 +255,38 @@ async def get_best_image(image_path: str) -> str:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{config['VIRCHOW_ENDPOINT']}/process/{filename}",
-                headers={"accept": "application/json"}
+                headers={"accept": "application/json"},
             )
 
         if response.status_code != 200:
             return f"Error: Failed to get prediction for {filename}"
-            
+
         return response.text
-        
+
     except Exception as e:
         return f"Error analyzing image: {str(e)}"
+
 
 async def get_segmentation_run(image_path: str) -> str:
     """Get image that most closely matches uploaded images."""
     try:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
-        
+
         # Make request to your model endpoint
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{config['MEDSAM_ENDPOINT']}/process/{filename}",
-                headers={"accept": "application/json"}
+                headers={"accept": "application/json"},
             )
         if response.status_code != 200:
             return f"Error: Failed to get prediction for {filename}"
-            
+
         return response.text
-        
+
     except Exception as e:
         return f"Error analyzing image: {str(e)}"
-    
+
 
 # Function mapping
 function_map = {
@@ -282,74 +295,71 @@ function_map = {
     "get_segmentation_run": get_segmentation_run,
 }
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "model": "gpt-4o"}
+
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """Chat endpoint that processes messages and handles image analysis"""
     try:
         conversation_history = [{"role": "system", "content": PROMPT_TEMPLATE}]
-        
+
         for msg in request.messages:
             if isinstance(msg.content, str):
-                conversation_history.append({
-                    "role": msg.role,
-                    "content": msg.content
-                })
+                conversation_history.append({"role": msg.role, "content": msg.content})
             else:  # List[ContentItem]
                 content_parts = []
                 for item in msg.content:
                     if item.type == "text":
-                        content_parts.append({
-                            "type": "text",
-                            "text": item.text
-                        })
+                        content_parts.append({"type": "text", "text": item.text})
                     elif item.type == "image_url" and item.image_url:
                         url_path = item.image_url["url"]
-                        
+
                         # Extract filename from URL
-                        filename = url_path.split('/')[-1]
-                        
+                        filename = url_path.split("/")[-1]
+
                         bucket_name = "uploads"
 
                         try:
                             response = await download_file(bucket_name, filename)
                             if isinstance(response, dict) and "error" in response:
-                                raise HTTPException(status_code=400, detail=response["error"])
+                                raise HTTPException(
+                                    status_code=400, detail=response["error"]
+                                )
                             image_data = response.body
-                            encoded_image = base64.b64encode(image_data).decode('utf-8')
-                            content_parts.append({
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{encoded_image}"
+                            encoded_image = base64.b64encode(image_data).decode("utf-8")
+                            content_parts.append(
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{encoded_image}"
+                                    },
                                 }
-                            })
+                            )
                         except Exception as e:
                             print(f"Error reading image from MinIO: {str(e)}")
                             raise HTTPException(
                                 status_code=400,
-                                detail=f"Error reading image file: {str(e)}"
+                                detail=f"Error reading image file: {str(e)}",
                             )
 
-                conversation_history.append({
-                    "role": msg.role,
-                    "content": content_parts
-                })
+                conversation_history.append(
+                    {"role": msg.role, "content": content_parts}
+                )
 
         response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=conversation_history,
-            max_tokens=500
+            model="gpt-4o", messages=conversation_history, max_tokens=500
         )
 
         assistant_reply = response.choices[0].message.content
         print(f"Assistant reply: {assistant_reply}")  # Debug log
 
         # Parse for function calls after image analysis
-        
+
         function_name, arguments = parse_llm_response(assistant_reply)
 
         if function_name and function_name in function_map:
@@ -358,15 +368,15 @@ async def chat_endpoint(request: ChatRequest):
                 result = function_map[function_name](arguments)
 
                 FUNCTION_PROMPT = "You are a medical AI assistant specializing in cancer diagnosis interpretation. Provide responses in plain text without markdown."
-                
-                if "cancer" in function_name: 
-                   # Create a prompt for GPT to interpret the results
+
+                if "cancer" in function_name:
+                    # Create a prompt for GPT to interpret the results
                     analysis_prompt = f"""
     Based on the image analysis, the model has detected the following:
 
     {result}
 
-    Please provide a clear, professional summary of these findings, explaining what they mean 
+    Please provide a clear, professional summary of these findings, explaining what they mean
     for a medical professional. Include:
     1. The primary cancer type identified
     2. The confidence levels for each prediction
@@ -381,7 +391,7 @@ async def chat_endpoint(request: ChatRequest):
 
     {result}
 
-    Please provide a clear, professional summary of these findings, explaining what they mean 
+    Please provide a clear, professional summary of these findings, explaining what they mean
     for a medical professional. Include:
     1. The primary cancer type identified
     2. The confidence levels for each prediction
@@ -389,18 +399,18 @@ async def chat_endpoint(request: ChatRequest):
 
     Please format your response in a clear, organized way.
     """
-                else: #segmentation
+                else:  # segmentation
                     # Create a prompt for GPT to interpret the results
-                    analysis_prompt = f"""Tell the user the image has been segmented and can be found in the downloads folder. If the user is unhappy with the segmentation performance, tell them to click on Explore AI models.
+                    analysis_prompt = """Tell the user the image has been segmented and can be found in the downloads folder. If the user is unhappy with the segmentation performance, tell them to click on Explore AI models.
     """
                 # Get GPT's interpretation
                 interpretation_response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
                         {"role": "system", "content": FUNCTION_PROMPT},
-                        {"role": "user", "content": analysis_prompt}
+                        {"role": "user", "content": analysis_prompt},
                     ],
-                    max_tokens=500
+                    max_tokens=500,
                 )
 
                 interpreted_result = interpretation_response.choices[0].message.content
@@ -410,20 +420,23 @@ async def chat_endpoint(request: ChatRequest):
                     "function_call": {
                         "name": function_name,
                         "raw_result": result,
-                        "interpreted_result": interpreted_result
-                    }
+                        "interpreted_result": interpreted_result,
+                    },
                 }
             except Exception as e:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Error executing function '{function_name}': {str(e)}"
+                    detail=f"Error executing function '{function_name}': {str(e)}",
                 )
 
         return {"response": assistant_reply}
 
     except Exception as e:
         print(f"Error in chat endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing request: {str(e)}"
+        )
+
 
 @app.post("/function")
 async def function_endpoint(request: FunctionRequest):
@@ -431,19 +444,20 @@ async def function_endpoint(request: FunctionRequest):
     try:
         if request.function_name not in function_map:
             raise HTTPException(
-                status_code=400,
-                detail=f"Function '{request.function_name}' not found"
+                status_code=400, detail=f"Function '{request.function_name}' not found"
             )
 
         result = function_map[request.function_name](*request.arguments)
         return {"result": result}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error executing function: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error executing function: {str(e)}"
+        )
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
-    #parse_llm_response("get_cancer_subtype, uploads/tcga1.png")
-    
-    
+    # parse_llm_response("get_cancer_subtype, uploads/tcga1.png")
