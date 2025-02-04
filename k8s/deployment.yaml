@@ -22,6 +22,11 @@ spec:
     spec:
       containers:
         - env:
+            - name: OBJECT_STORAGE_API
+              valueFrom:
+                configMapKeyRef:
+                  key: OBJECT_STORAGE_API
+                  name: env-kube
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -36,21 +41,6 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   key: MEDSAM_ENDPOINT
-                  name: env-kube
-            - name: MINIO_ACCESS_KEY
-              valueFrom:
-                configMapKeyRef:
-                  key: MINIO_ACCESS_KEY
-                  name: env-kube
-            - name: MINIO_ENDPOINT
-              valueFrom:
-                configMapKeyRef:
-                  key: MINIO_ENDPOINT
-                  name: env-kube
-            - name: MINIO_SECRET_KEY
-              valueFrom:
-                configMapKeyRef:
-                  key: MINIO_SECRET_KEY
                   name: env-kube
             - name: VIRCHOW_ENDPOINT
               valueFrom:
