@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "minio>=7.2.15",
     "openai>=1.59.8",
+    "pre-commit>=4.1.0",
     "python-dotenv>=1.0.1",
     "python-multipart>=0.0.20",
     "uvicorn>=0.34.0",
