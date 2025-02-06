@@ -19,13 +19,23 @@ uv python install 3.11
 uv sync
 ```
 
+activate the environment to run commands without the `uv run` prefix
+```bash
+source .venv/bin/activate
+```
+
+install `pre-commit` git hook scripts
+```bash
+pre-commit install
+```
+
 start the service
 ```bash
 # development
-uv run fastapi dev --host 127.0.0.1 --port 8000 service.py
+fastapi dev --host 127.0.0.1 --port 8000 service.py
 
 # production
-uv run uvicorn service:app --host 127.0.0.1 --port 8000
+uvicorn service:app --host 127.0.0.1 --port 8000
 ```
 
 
