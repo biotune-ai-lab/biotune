@@ -64,6 +64,9 @@ refer to the repo pages and setup accordingly
 --- Built during AI x Cancer Hack - Jan 2025, Cambridge, United Kingdom ---
 
 
+## NOTES
+1. If developing on a windows device, run `git config --global core.autocrlf input` before making any commits > this normalises CLRF line endings to LF
+
 ## Team
 
 Ananya Bhalla - [GitHub](https://github.com/AnanyaBhalla), [LinkedIn](https://www.linkedin.com/in/ananyabhalla/)

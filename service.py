@@ -10,11 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel
 
-from config import config
+from config import Config
 
 # Initialize the FastAPI app
 app = FastAPI()
-client = OpenAI(api_key=config["OPENAI_API_KEY"])
+config = Config()
+
+client = OpenAI(
+    base_url="https://api.studio.nebius.ai/v1/", api_key=config.NEBIUS_API_KEY
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,7 +33,7 @@ app.add_middleware(
 @app.get("/bucket/{bucket_name}")
 async def list_files(bucket_name: str):
     # Assuming you have defined OBJECT_STORAGE_API in your config/environment
-    storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}"
+    storage_api_url = f"{config.OBJECT_STORAGE_API}/bucket/{bucket_name}"
 
     async with httpx.AsyncClient() as client:
         response = await client.get(storage_api_url)
@@ -44,7 +48,7 @@ async def upload_file(bucket_name: str, file: UploadFile = File(...)):
         print(f"Received file upload request for bucket: {bucket_name}")
         print(f"File details - name: {file.filename}, type: {file.content_type}")
 
-        storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/upload"
+        storage_api_url = f"{config.OBJECT_STORAGE_API}/bucket/{bucket_name}/upload"
         print(f"Forwarding to storage API: {storage_api_url}")
 
         # Read the file content
@@ -87,7 +91,7 @@ async def upload_file(bucket_name: str, file: UploadFile = File(...)):
 @app.get("/bucket/{bucket_name}/download/{filename}")
 async def download_file(bucket_name: str, filename: str):
     storage_api_url = (
-        f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/download/{filename}"
+        f"{config.OBJECT_STORAGE_API}/bucket/{bucket_name}/download/{filename}"
     )
 
     try:
@@ -119,7 +123,7 @@ async def download_file(bucket_name: str, filename: str):
 @app.delete("/bucket/{bucket_name}/delete/{filename}")
 async def delete_file(bucket_name: str, filename: str):
     storage_api_url = (
-        f"{config['OBJECT_STORAGE_API']}/bucket/{bucket_name}/delete/{filename}"
+        f"{config.OBJECT_STORAGE_API}/bucket/{bucket_name}/delete/{filename}"
     )
 
     try:
@@ -140,7 +144,7 @@ async def delete_file(bucket_name: str, filename: str):
 
 @app.post("/bucket/create/{bucket_name}")
 async def create_bucket(bucket_name: str):
-    storage_api_url = f"{config['OBJECT_STORAGE_API']}/bucket/create/{bucket_name}"
+    storage_api_url = f"{config.OBJECT_STORAGE_API}/bucket/create/{bucket_name}"
 
     try:
         async with httpx.AsyncClient() as client:
@@ -233,7 +237,7 @@ async def get_cancer_subtype(image_path: str) -> str:
         # Make request to your model endpoint
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{config['CONCH_ENDPOINT']}/process/minio/uploads/{filename}",
+                f"{config.CONCH_ENDPOINT}/process/minio/uploads/{filename}",
                 headers={"accept": "application/json"},
             )
 
@@ -254,7 +258,7 @@ async def get_best_image(image_path: str) -> str:
         # Make request to your model endpoint
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{config['VIRCHOW_ENDPOINT']}/process/{filename}",
+                f"{config.VIRCHOW_ENDPOINT}/process/{filename}",
                 headers={"accept": "application/json"},
             )
 
@@ -276,7 +280,7 @@ async def get_segmentation_run(image_path: str) -> str:
         # Make request to your model endpoint
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{config['MEDSAM_ENDPOINT']}/process/{filename}",
+                f"{config.MEDSAM_ENDPOINT}/process/{filename}",
                 headers={"accept": "application/json"},
             )
         if response.status_code != 200:
@@ -352,7 +356,7 @@ async def chat_endpoint(request: ChatRequest):
                 )
 
         response = client.chat.completions.create(
-            model="gpt-4o", messages=conversation_history, max_tokens=500
+            model=config.MODEL, messages=conversation_history, max_tokens=500
         )
 
         assistant_reply = response.choices[0].message.content
@@ -405,7 +409,8 @@ async def chat_endpoint(request: ChatRequest):
     """
                 # Get GPT's interpretation
                 interpretation_response = client.chat.completions.create(
-                    model="gpt-4o",
+                    # model="gpt-4o",
+                    model="deepseek-ai/DeepSeek-V3",
                     messages=[
                         {"role": "system", "content": FUNCTION_PROMPT},
                         {"role": "user", "content": analysis_prompt},
@@ -460,4 +465,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
-    # parse_llm_response("get_cancer_subtype, uploads/tcga1.png")
