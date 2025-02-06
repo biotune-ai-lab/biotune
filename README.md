@@ -1,7 +1,23 @@
 # biotune.ai
 
+## 1a. run service in a Docker container
 
-## 1a. set up and run the service locally
+create `.env.docker` file from template; update environment variable values if needed
+```bash
+cp .env.docker.example .env.docker
+```
+
+build the Docker image
+```bash
+docker build -t biotune-ai .
+```
+
+run the Docker container service
+```bash
+docker compose up
+```
+
+## 1b. set up and run the service locally
 
 create `.env` file from template; update environment variable values if needed
 ```bash
@@ -37,25 +53,6 @@ fastapi dev --host 127.0.0.1 --port 8000 service.py
 # production
 uvicorn service:app --host 127.0.0.1 --port 8000
 ```
-
-
-## 1b. run service in a Docker container
-
-create `.env.docker` file from template; update environment variable values if needed
-```bash
-cp .env.docker.example .env.docker
-```
-
-build the Docker image
-```bash
-docker build -t biotune-ai .
-```
-
-run the Docker container service
-```bash
-docker compose up
-```
-
 
 ## 2. run the other services
 
