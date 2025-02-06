@@ -47,11 +47,9 @@ spec:
                 configMapKeyRef:
                   key: VIRCHOW_ENDPOINT
                   name: env-kube
-          image: cr.eu-west1.nebius.cloud/e01gq88339pxykbawe/biotune-ai
+          image: cr.eu-west1.nebius.cloud/e01gq88339pxykbawe/biotune-ai:latest
           name: biotune-ai
           ports:
             - containerPort: 8000
               protocol: TCP
       #restartPolicy: Always
-      #imagePullSecrets: # need to add this
-      #  - name: nebius-regcred
