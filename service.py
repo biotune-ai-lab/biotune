@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 
-# MinIO services
+# Object storage services
 @app.get("/bucket/{bucket_name}")
 async def list_files(bucket_name: str):
     # Assuming you have defined OBJECT_STORAGE_API in your config/environment
@@ -195,14 +195,14 @@ You are an AI assistant specialized in analyzing medical images and cancer subty
 After analyzing any images, you should determine if you need to call any functions. If you don't need to call a function, provide your analysis normally. Provide responses in plain text without markdown.
 
 Available functions:
-1. get_cancer_subtype: Classifies the subtype of cancer based on an image path. This function uses Conch, a Vision-Language Model trained on pathology data.
+1. subtype_image: Classifies the subtype of cancer based on an image path. This function uses Conch, a Vision-Language Model trained on pathology data.
 2. get_best_image: Find the image most similar to the uploaded image based on morphology. This function uses Virchow, a foundation model for pathology.
 3. get_segmentation_run: Segments the image. Uses MedSAM.
 
 If the user asks you for further assistance or evaluation or task, determine if a function should be called, with an output in the format:
 "function_name, argument"
 Examples:
-"get_cancer_subtype, tcga_10.png"
+"subtype_image, tcga_10.png"
 
 We only have three filenames, tcga_10.png, tcga_11.png, tcga_20.png
 """
@@ -229,7 +229,8 @@ def parse_llm_response(response: str) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-async def get_cancer_subtype(image_path: str) -> str:
+async def subtype_image(image_path: str) -> str:
+    print(f"subtype_image image path: {image_path}")  # Debug log
     """Classify cancer subtype from an image."""
     try:
         # Extract just the filename from the path
@@ -237,7 +238,7 @@ async def get_cancer_subtype(image_path: str) -> str:
         # Make request to your model endpoint
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{config.CONCH_ENDPOINT}/process/minio/uploads/{filename}",
+                f"{config.CONCH_ENDPOINT}/process/uploads/{filename}",
                 headers={"accept": "application/json"},
             )
 
@@ -294,7 +295,7 @@ async def get_segmentation_run(image_path: str) -> str:
 
 # Function mapping
 function_map = {
-    "get_cancer_subtype": get_cancer_subtype,
+    "subtype_image": subtype_image,
     "get_best_image": get_best_image,
     "get_segmentation_run": get_segmentation_run,
 }
