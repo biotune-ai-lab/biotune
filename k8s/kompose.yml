@@ -1,7 +1,0 @@
-services:
-  biotune-ai:
-    image: cr.eu-west1.nebius.cloud/e01gq88339pxykbawe/biotune-ai
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env.kube

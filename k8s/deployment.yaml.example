@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    io.kompose.service: biotune-ai
+  name: biotune-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: biotune-ai
+  template:
+    metadata:
+      labels:
+        io.kompose.service: biotune-ai
+    spec:
+      containers:
+        - name: biotune-ai
+          image: cr.eu-west1.nebius.cloud/e01gq88339pxykbawe/biotune-ai:latest
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: biotune-creds
+      #restartPolicy: Always
