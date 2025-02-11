@@ -1,0 +1,31 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: biotune-ai-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: biotune-ai
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50    # More reasonable threshold
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 180  # Wait 30 minutes before scaling to zero
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleUp:
+      stabilizationWindowSeconds: 0      # Scale up immediately when needed
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15

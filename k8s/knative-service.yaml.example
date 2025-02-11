@@ -1,0 +1,30 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: biotune-ai
+  labels:
+    io.kompose.service: biotune-ai
+spec:
+  template:
+    metadata:
+      labels:
+        io.kompose.service: biotune-ai
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/target: "30" # Target number of concurrent requests per pod that triggers scaling. This will be less than containerConcurrency. See wiki for more information
+        autoscaling.knative.dev/metric: "concurrency" # Scale based on concurrent requests
+        autoscaling.knative.dev/window: "10s" # window to monitor before making scaling decision (scale up or scale down)
+        autoscaling.knative.dev/scale-down-delay: "10s" # After `window` monitor period, this is the delay before scaling down
+        autoscaling.knative.dev/scaleToZeroPodRetentionPeriod: "10s" # Zero pod specific scale down time on top of the `scale-down-delay`
+        autoscaling.knative.dev/initial-scale: "1"
+    spec:
+      containers:
+        - name: biotune-ai
+          image: cr.eu-west1.nebius.cloud/e01gq88339pxykbawe/biotune-ai:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: biotune-creds
+      containerConcurrency: 50 # Hard limit on concurrent requests a pod can handle before Knative creates new pods
