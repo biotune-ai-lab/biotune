@@ -1,8 +1,10 @@
+from typing import Dict
+
 import yaml
 
 
-def _load_model_config():
-    """Load model configurations from models.yaml"""
+def load_model_config() -> Dict:
+    """Load all model configurations from models.yaml"""
     try:
         with open("models.yaml", "r") as f:
             config = yaml.safe_load(f)
@@ -13,14 +15,9 @@ def _load_model_config():
         raise ValueError("Invalid config - missing 'models' section")
 
 
-def get_prompt(model: str, prompt_name: str, **kwargs) -> str:
-    """Get prompt for specific model and format it with parameters.
-
-    Args:
-        model: The model to get the prompt for (e.g., "gpt-4o", "conch")
-        prompt_name: Name of the prompt to get (e.g., "system", "subtype_image")
-    """
-    model_config = _load_model_config()
+def get_prompt(model: str, prompt_type: str, **kwargs) -> str:
+    """Generic prompt loader for any model type"""
+    model_config = load_model_config()
 
     if model not in model_config:
         raise ValueError(f"Unknown model: {model}")
@@ -28,15 +25,15 @@ def get_prompt(model: str, prompt_name: str, **kwargs) -> str:
     if "prompts" not in model_config[model]:
         raise ValueError(f"No prompts configured for model {model}")
 
-    if prompt_name not in model_config[model]["prompts"]:
-        raise ValueError(f"No prompt '{prompt_name}' found for model {model}")
+    if prompt_type not in model_config[model]["prompts"]:
+        raise ValueError(f"No prompt '{prompt_type}' found for model {model}")
 
-    prompt_path = model_config[model]["prompts"][prompt_name]
+    prompt_path = model_config[model]["prompts"][prompt_type]
 
     try:
         with open(prompt_path) as f:
             template = f.read()
-        return template.format(**kwargs)
+        return template.format(**kwargs) if kwargs else template
     except FileNotFoundError:
         raise ValueError(f"Prompt file not found: {prompt_path}")
     except KeyError as e:
@@ -44,12 +41,11 @@ def get_prompt(model: str, prompt_name: str, **kwargs) -> str:
 
 
 def get_domain_model(function_name: str) -> str:
-    """Get the appropriate domain model based on function name."""
-    model_config = _load_model_config()  # Changed from load_model_config
+    """Map function name to corresponding domain model"""
+    model_config = load_model_config()
 
-    # Search through models to find which one has this function
     for model, config in model_config.items():
         if "prompts" in config and function_name in config["prompts"]:
             return model
 
-    raise ValueError(f"No model found for function: {function_name}")
+    raise ValueError(f"No domain model found for function: {function_name}")

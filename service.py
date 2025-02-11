@@ -7,15 +7,16 @@ from typing import Dict, List, Optional, Union
 import httpx
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from openai import OpenAI
 from pydantic import BaseModel
 
 import models
 from config import Config
+from llm_client import LLMClient
 
 # Initialize the FastAPI app
 app = FastAPI()
 config = Config()
+llm_client = LLMClient(config)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,13 +25,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-if config.LLM_MODEL == "gpt-4o":
-    llm_client = OpenAI(api_key=config.LLM_API_KEY)
-else:
-    llm_client = OpenAI(
-        base_url="https://api.studio.nebius.ai/v1/", api_key=config.LLM_API_KEY
-    )
 
 
 @app.get("/health")
@@ -351,11 +345,7 @@ async def chat_endpoint(request: ChatRequest):
                     {"role": msg.role, "content": content_parts}
                 )
 
-        response = llm_client.chat.completions.create(
-            model=config.LLM_MODEL, messages=conversation_history, max_tokens=500
-        )
-
-        assistant_reply = response.choices[0].message.content
+        assistant_reply = llm_client.get_completion(messages=conversation_history)
         print(f"Assistant reply: {assistant_reply}")  # Debug log
 
         # Parse for function calls after image analysis
@@ -378,16 +368,14 @@ async def chat_endpoint(request: ChatRequest):
                 )
 
                 # Get GPT's interpretation of the domain model's system and analysis prompt
-                interpretation_response = llm_client.chat.completions.create(
-                    model=config.LLM_MODEL,
+                # Get GPT's interpretation of the domain model's system and analysis prompt
+                interpreted_result = llm_client.get_completion(
                     messages=[
                         {"role": "system", "content": domain_model_system_prompt},
                         {"role": "user", "content": analysis_prompt},
                     ],
-                    max_tokens=500,
+                    # override_params={"temperature": 0.5, "max_tokens": 1000}  # If you need different params for interpretation
                 )
-
-                interpreted_result = interpretation_response.choices[0].message.content
 
                 return {
                     "response": interpreted_result,

@@ -2,16 +2,29 @@
 models:
   # Language Models
   gpt-4o:
+    parameters:
     prompts:
       system: models/gpt-4o/prompts/system.txt
 
   deepseek-ai/DeepSeek-R1:
+    parameters:
+      max_tokens: 256
+      temperature: 0.3
+      top_p: 0.1
+      frequency_penalty: 0
+      presence_penalty: 0
     prompts:
       system: models/gpt-4o/prompts/system.txt
 
   llava-hf/llava-1.5-13b-hf:
+    parameters:
+      max_tokens: 256
+      temperature: 0.3
+      top_p: 0.1
+      frequency_penalty: 0
+      presence_penalty: 0
     prompts:
-      system: models/gpt-4o/prompts/system.txt
+      system: models/llava/prompts/system.txt
 
   # Domain Models
   conch:
