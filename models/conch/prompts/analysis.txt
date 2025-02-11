@@ -1,0 +1,11 @@
+Based on the image analysis, the model has detected the following:
+
+{result}
+
+Please provide a clear, professional summary of these findings, explaining what they mean
+for a medical professional. Include:
+1. The primary cancer type identified
+2. The confidence levels for each prediction
+3. Any relevant clinical implications
+
+Please format your response in a clear, organized way.
