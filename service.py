@@ -16,14 +16,12 @@ from config import Config
 app = FastAPI()
 config = Config()
 
-
 if config.LLM_MODEL == "openai":
     client = OpenAI(api_key=config.LLM_API_KEY)
 else:
     client = OpenAI(
         base_url="https://api.studio.nebius.ai/v1/", api_key=config.LLM_API_KEY
     )
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,7 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # Object storage services
 @app.get("/bucket/{bucket_name}")
@@ -299,6 +296,7 @@ async def get_segmentation_run(image_path: str) -> str:
 
         print(f"Making request to: {endpoint_url}")  # Debug print
         # Make request to your model endpoint
+
         async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
             response = await client.post(
                 f"{config.SAM_ENDPOINT}/process/{filename}",

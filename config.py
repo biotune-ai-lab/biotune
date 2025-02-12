@@ -11,6 +11,7 @@ class Config:
         self.OBJECT_STORAGE_API = os.getenv(
             "OBJECT_STORAGE_API", "http://127.0.0.1:59090"
         )
+        
         self.LLM_MODEL = os.getenv("LLM_MODEL", "openai")
         if self.LLM_MODEL == "openai":
             self.LLM_API_KEY = os.getenv("OPENAI_API_KEY")
