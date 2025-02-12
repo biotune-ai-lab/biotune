@@ -1,0 +1,49 @@
+# models.yaml ---> order is models >  model > prompts > function/prompt
+models:
+  # Language Models
+  gpt-4o:
+    parameters:
+    prompts:
+      system: models/gpt-4o/prompts/system.txt
+
+  deepseek-ai/DeepSeek-R1:
+    parameters:
+      max_tokens: 256
+      temperature: 0.3
+      top_p: 0.1
+      frequency_penalty: 0
+      presence_penalty: 0
+    prompts:
+      system: models/gpt-4o/prompts/system.txt
+
+  llava-hf/llava-1.5-13b-hf:
+    parameters:
+      max_tokens: 256
+      temperature: 0.3
+      top_p: 0.1
+      frequency_penalty: 0
+      presence_penalty: 0
+    prompts:
+      system: models/llava/prompts/system.txt
+
+  # Domain Models
+  conch:
+    prompts:
+      system: models/conch/prompts/system.txt
+      subtype_image: models/conch/prompts/analysis.txt
+
+  sam:
+    prompts:
+      system: models/conch/prompts/system.txt
+      segment_image_with_sam: models/conch/prompts/analysis.txt
+      response: models/sam/prompts/response.txt
+
+  medsam:
+    prompts:
+      system: models/conch/prompts/system.txt
+      segment_image_with_medsam: models/conch/prompts/analysis.txt
+      response: models/sam/prompts/response.txt
+
+  virchow:
+    prompts:
+      system: models/conch/prompts/system.txt

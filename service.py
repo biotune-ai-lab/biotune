@@ -7,21 +7,16 @@ from typing import Dict, List, Optional, Union
 import httpx
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from openai import OpenAI
 from pydantic import BaseModel
 
+import models
 from config import Config
+from llm_client import LLMClient
 
 # Initialize the FastAPI app
 app = FastAPI()
 config = Config()
-
-if config.LLM_MODEL == "openai":
-    client = OpenAI(api_key=config.LLM_API_KEY)
-else:
-    client = OpenAI(
-        base_url="https://api.studio.nebius.ai/v1/", api_key=config.LLM_API_KEY
-    )
+llm_client = LLMClient(config)
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +25,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "model": f"{config.LLM_MODEL}"}
 
 # Object storage services
 @app.get("/bucket/{bucket_name}")
@@ -166,10 +166,6 @@ async def create_bucket(bucket_name: str):
 
 
 # Request models
-class ImageUrl(BaseModel):
-    url: str
-
-
 class ContentItem(BaseModel):
     type: str
     text: Optional[str] = None
@@ -183,30 +179,6 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
-
-
-class FunctionRequest(BaseModel):
-    function_name: str
-    arguments: List[str]
-
-
-# System prompt template
-PROMPT_TEMPLATE = """
-You are an AI assistant specialized in analyzing medical images and cancer subtypes.
-After analyzing any images, you should determine if you need to call any functions. If you don't need to call a function, provide your analysis normally. Provide responses in plain text without markdown.
-
-Available functions:
-1. subtype_image: Classifies the subtype of cancer based on an image path. This function uses Conch, a Vision-Language Model trained on pathology data.
-2. get_best_image: Find the image most similar to the uploaded image based on morphology. This function uses Virchow, a foundation model for pathology.
-3. get_segmentation_run: Segments the image. Uses MedSAM.
-
-If the user asks you for further assistance or evaluation or task, determine if a function should be called, with an output in the format:
-"function_name, argument"
-Examples:
-"subtype_image, tcga_10.png"
-
-We only have three filenames, tcga_10.png, tcga_11.png, tcga_20.png
-"""
 
 
 def parse_llm_response(response: str) -> tuple[Optional[str], Optional[str]]:
@@ -230,76 +202,18 @@ def parse_llm_response(response: str) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-async def subtype_image(image_path: str) -> str:
-    """Classify cancer subtype from an image."""
-    try:
-        # Extract just the filename from the path
-        filename = os.path.basename(image_path)
-        # Make request to your model endpoint
-
-        async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
-            print(f"Sending request to: {config.CONCH_ENDPOINT}/process/{filename}")
-            response = await client.get(
-                f"{config.CONCH_ENDPOINT}/process/{filename}",
-                headers={"accept": "application/json"},
-            )
-
-        print(response.text)
-
-        if response.status_code != 200:
-            return f"Error: Failed to get prediction for {filename}. Status: {response.status_code}"
-
-        return response.text
-
-    except httpx.TimeoutException:
-        return "Error: Request timed out while waiting for the service"
-    except Exception as e:
-        print(f"Exception occurred: {str(e)}")  # Debug log
-        return f"Error analyzing image: {str(e)}"
-
-
-"""
-    except Exception as e:
-        return f"Error analyzing image: {str(e)}"
-
-"""
-
-
-async def get_best_image(image_path: str) -> str:
-    """Get image that most closely matches uploaded images."""
-    try:
-        # Extract just the filename from the path
-        filename = os.path.basename(image_path)
-        # Make request to your model endpoint
-        async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
-            response = await client.get(
-                f"{config.VIRCHOW_ENDPOINT}/process/{filename}",
-                headers={"accept": "application/json"},
-            )
-
-        if response.status_code != 200:
-            return f"Error: Failed to get prediction for {filename}"
-
-        return response.text
-
-    except Exception as e:
-        return f"Error analyzing image: {str(e)}"
-
-
-async def get_segmentation_run(image_path: str) -> str:
-    """Get image that most closely matches uploaded images."""
+async def get_image_analysis(image_path: str, endpoint) -> str:
     try:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
 
-        endpoint_url = f"{config.SAM_ENDPOINT}/process/{filename}"
+        endpoint_url = f"{endpoint}/process/{filename}"
 
         print(f"Making request to: {endpoint_url}")  # Debug print
-        # Make request to your model endpoint
 
         async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
-            response = await client.post(
-                f"{config.SAM_ENDPOINT}/process/{filename}",
+            response = await client.get(
+                endpoint_url,
                 headers={"accept": "application/json"},
             )
 
@@ -310,31 +224,84 @@ async def get_segmentation_run(image_path: str) -> str:
             print(f"Error response: {error_text}")  # Debug print
             return f"Error: Failed to get prediction for {filename}"
 
+        print(
+            f"Response data: {response.text}"
+        )  # Add this to see what you're getting back
         return response.text
 
+    except httpx.TimeoutException:
+        return "Error: Request timed out while waiting for the service"
     except Exception as e:
+        print(f"Exception occurred: {str(e)}")  # Debug log
         return f"Error analyzing image: {str(e)}"
 
 
-# Function mapping
-function_map = {
-    "subtype_image": subtype_image,
-    "get_best_image": get_best_image,
-    "get_segmentation_run": get_segmentation_run,
-}
+async def process_and_save_image(image_path: str, endpoint) -> str:
+    try:
+        # Extract just the filename from the path
+        filename = os.path.basename(image_path)
+
+        endpoint_url = f"{endpoint}/process/{filename}"
+
+        print(f"Making request to: {endpoint_url}")  # Debug print
+        # Make request to your model endpoint
+
+        async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
+            response = await client.post(
+                endpoint_url,
+                headers={"accept": "application/json"},
+            )
+
+        print(f"Got response with status: {response.status_code}")  # Debug print
+
+        if response.status_code != 200:
+            error_text = await response.text()  # Get error details
+            print(f"Error response: {error_text}")  # Debug print
+            return f"Error: Failed to get prediction for {filename}"
+
+        print(
+            f"Response data: {response.text}"
+        )  # Add this to see what you're getting back
+        return response.text
+
+    except httpx.TimeoutException:
+        return "Error: Request timed out while waiting for the service"
+    except Exception as e:
+        print(f"Exception occurred: {str(e)}")  # Debug log
+        return f"Error analyzing image: {str(e)}"
 
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "model": f"{config.MODEL}"}
+async def subtype_image(image_path: str) -> str:
+    """Classify cancer subtype from an image."""
+    result = await get_image_analysis(image_path, config.CONCH_ENDPOINT)
+    return result
+
+
+async def get_best_image(image_path: str) -> str:
+    """Get image that most closely matches uploaded images."""
+    result = await get_image_analysis(image_path, config.VIRCHOW_ENDPOINT)
+    return result
+
+
+async def segment_image_with_medsam(image_path: str) -> str:
+    print("Error: Function not implemented yet, will do this with SAM")
+    result = await process_and_save_image(image_path, config.SAM_ENDPOINT)
+    return result
+
+
+async def segment_image_with_sam(image_path: str) -> str:
+    """Get image that most closely matches uploaded images."""
+    result = await process_and_save_image(image_path, config.SAM_ENDPOINT)
+    return result
 
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """Chat endpoint that processes messages and handles image analysis"""
     try:
-        conversation_history = [{"role": "system", "content": PROMPT_TEMPLATE}]
+        conversation_history = [
+            {"role": "system", "content": models.get_prompt(config.LLM_MODEL, "system")}
+        ]
 
         for msg in request.messages:
             if isinstance(msg.content, str):
@@ -350,10 +317,8 @@ async def chat_endpoint(request: ChatRequest):
                         # Extract filename from URL
                         filename = url_path.split("/")[-1]
 
-                        bucket_name = "uploads"
-
                         try:
-                            response = await download_file(bucket_name, filename)
+                            response = await download_file("uploads", filename)
                             if isinstance(response, dict) and "error" in response:
                                 raise HTTPException(
                                     status_code=400, detail=response["error"]
@@ -379,15 +344,10 @@ async def chat_endpoint(request: ChatRequest):
                     {"role": msg.role, "content": content_parts}
                 )
 
-        response = client.chat.completions.create(
-            model=config.MODEL, messages=conversation_history, max_tokens=500
-        )
-
-        assistant_reply = response.choices[0].message.content
+        assistant_reply = llm_client.get_completion(messages=conversation_history)
         print(f"Assistant reply: {assistant_reply}")  # Debug log
 
         # Parse for function calls after image analysis
-
         function_name, arguments = parse_llm_response(assistant_reply)
 
         if function_name and function_name in function_map:
@@ -395,53 +355,26 @@ async def chat_endpoint(request: ChatRequest):
                 # Get the model's prediction
                 result = await function_map[function_name](arguments)
 
-                FUNCTION_PROMPT = "You are a medical AI assistant specializing in cancer diagnosis interpretation. Provide responses in plain text without markdown."
+                # Load the domain model that maps to the function name
+                domain_model = models.get_domain_model(function_name)
 
-                if "subtype" in function_name:
-                    # Create a prompt for GPT to interpret the results
-                    analysis_prompt = f"""
-    Based on the image analysis, the model has detected the following:
+                # Get domain model's system prompt
+                domain_model_system_prompt = models.get_prompt(domain_model, "system")
 
-    {result}
-
-    Please provide a clear, professional summary of these findings, explaining what they mean
-    for a medical professional. Include:
-    1. The primary cancer type identified
-    2. The confidence levels for each prediction
-    3. Any relevant clinical implications
-
-    Please format your response in a clear, organized way.
-    """
-                elif "best" in function_name:
-                    # Create a prompt for GPT to interpret the results
-                    analysis_prompt = f"""
-    Based on the image analysis, the model has detected the following:
-
-    {result}
-
-    Please provide a clear, professional summary of these findings, explaining what they mean
-    for a medical professional. Include:
-    1. The primary cancer type identified
-    2. The confidence levels for each prediction
-    3. Any relevant clinical implications
-
-    Please format your response in a clear, organized way.
-    """
-                else:  # segmentation
-                    # Create a prompt for GPT to interpret the results
-                    analysis_prompt = """Tell the user the image has been segmented and can be found in the downloads folder. If the user is unhappy with the segmentation performance, tell them to click on Explore AI models.
-    """
-                # Get GPT's interpretation
-                interpretation_response = client.chat.completions.create(
-                    model=config.MODEL,
-                    messages=[
-                        {"role": "system", "content": FUNCTION_PROMPT},
-                        {"role": "user", "content": analysis_prompt},
-                    ],
-                    max_tokens=500,
+                # Get domain model's analysis prompt and wrap the result in
+                analysis_prompt = models.get_prompt(
+                    domain_model, function_name, result=result
                 )
 
-                interpreted_result = interpretation_response.choices[0].message.content
+                # Get GPT's interpretation of the domain model's system and analysis prompt
+                # Get GPT's interpretation of the domain model's system and analysis prompt
+                interpreted_result = llm_client.get_completion(
+                    messages=[
+                        {"role": "system", "content": domain_model_system_prompt},
+                        {"role": "user", "content": analysis_prompt},
+                    ],
+                    # override_params={"temperature": 0.5, "max_tokens": 1000}  # If you need different params for interpretation
+                )
 
                 return {
                     "response": interpreted_result,
@@ -466,23 +399,13 @@ async def chat_endpoint(request: ChatRequest):
         )
 
 
-@app.post("/function")
-async def function_endpoint(request: FunctionRequest):
-    """Direct function execution endpoint"""
-    try:
-        if request.function_name not in function_map:
-            raise HTTPException(
-                status_code=400, detail=f"Function '{request.function_name}' not found"
-            )
-
-        result = function_map[request.function_name](*request.arguments)
-        return {"result": result}
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error executing function: {str(e)}"
-        )
-
+# Function mapping
+function_map = {
+    "subtype_image": subtype_image,
+    "get_best_image": get_best_image,
+    "segment_image_with_medsam": segment_image_with_medsam,
+    "segment_image_with_sam": segment_image_with_sam,
+}
 
 if __name__ == "__main__":
     import uvicorn

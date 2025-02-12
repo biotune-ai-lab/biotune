@@ -13,7 +13,9 @@ RUN apt-get update && \
 
 ENV PATH="/root/.local/bin/:$PATH"
 
-COPY .python-version config.py service.py pyproject.toml uv.lock /app/
+COPY models/ /app/models/
+
+COPY .python-version config.py llm_client.py models.py models.yaml service.py pyproject.toml uv.lock /app/
 
 RUN uv sync
 

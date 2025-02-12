@@ -1,0 +1,1 @@
+Tell the user the image has been segmented and can be found in the downloads folder. If the user is unhappy with the segmentation performance, tell them to click on Explore AI models.

@@ -8,22 +8,20 @@ class Config:
         if os.path.exists(".env"):  # Load .env file if it exists
             load_dotenv(".env", override=True)
 
+        self.LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+
+        if self.LLM_MODEL == "gpt-4o":
+            API_KEY = "OPENAI_API_KEY"
+        else:
+            API_KEY = "NEBIUS_API_KEY"
+
+        self.LLM_API_KEY = os.getenv(API_KEY)
+        if not self.LLM_API_KEY:
+            raise ValueError(f"{API_KEY} is not set")
+
         self.OBJECT_STORAGE_API = os.getenv(
             "OBJECT_STORAGE_API", "http://127.0.0.1:59090"
         )
-        
-        self.LLM_MODEL = os.getenv("LLM_MODEL", "openai")
-        if self.LLM_MODEL == "openai":
-            self.LLM_API_KEY = os.getenv("OPENAI_API_KEY")
-            if not self.LLM_API_KEY:
-                raise ValueError("OPENAI_API_KEY is not set")
-            self.MODEL = "gpt-4o"
-
-        else:
-            self.LLM_API_KEY = os.getenv("NEBIUS_API_KEY")
-            if not self.LLM_API_KEY:
-                raise ValueError("NEBIUS_API_KEY is not set")
-            self.MODEL = "deepseek-ai/DeepSeek-R1"
         self.CONCH_ENDPOINT = os.getenv("CONCH_ENDPOINT", "http://127.0.0.1:54001")
         self.VIRCHOW_ENDPOINT = os.getenv("VIRCHOW_ENDPOINT", "http://127.0.0.1:54002")
         self.MEDSAM_ENDPOINT = os.getenv("MEDSAM_ENDPOINT", "http://127.0.0.1:54003")
