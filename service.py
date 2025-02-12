@@ -26,12 +26,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "model": f"{config.LLM_MODEL}"}
-
 
 # Object storage services
 @app.get("/bucket/{bucket_name}")
@@ -247,6 +245,7 @@ async def process_and_save_image(image_path: str, endpoint) -> str:
 
         print(f"Making request to: {endpoint_url}")  # Debug print
         # Make request to your model endpoint
+
         async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
             response = await client.post(
                 endpoint_url,
