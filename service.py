@@ -16,9 +16,12 @@ from config import Config
 app = FastAPI()
 config = Config()
 
-client = OpenAI(
-    base_url="https://api.studio.nebius.ai/v1/", api_key=config.NEBIUS_API_KEY
-)
+if config.LLM_MODEL == "openai":
+    client = OpenAI(api_key=config.LLM_API_KEY)
+else:
+    client = OpenAI(
+        base_url="https://api.studio.nebius.ai/v1/", api_key=config.LLM_API_KEY
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,8 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# MinIO services
+# Object storage services
 @app.get("/bucket/{bucket_name}")
 async def list_files(bucket_name: str):
     # Assuming you have defined OBJECT_STORAGE_API in your config/environment
@@ -45,8 +47,7 @@ async def list_files(bucket_name: str):
 async def upload_file(bucket_name: str, file: UploadFile = File(...)):
     try:
         # Debug log what we received
-        print(f"Received file upload request for bucket: {bucket_name}")
-        print(f"File details - name: {file.filename}, type: {file.content_type}")
+        print(f"Received file - name: {file.filename}, type: {file.content_type}")
 
         storage_api_url = f"{config.OBJECT_STORAGE_API}/bucket/{bucket_name}/upload"
         print(f"Forwarding to storage API: {storage_api_url}")
@@ -195,14 +196,14 @@ You are an AI assistant specialized in analyzing medical images and cancer subty
 After analyzing any images, you should determine if you need to call any functions. If you don't need to call a function, provide your analysis normally. Provide responses in plain text without markdown.
 
 Available functions:
-1. get_cancer_subtype: Classifies the subtype of cancer based on an image path. This function uses Conch, a Vision-Language Model trained on pathology data.
+1. subtype_image: Classifies the subtype of cancer based on an image path. This function uses Conch, a Vision-Language Model trained on pathology data.
 2. get_best_image: Find the image most similar to the uploaded image based on morphology. This function uses Virchow, a foundation model for pathology.
 3. get_segmentation_run: Segments the image. Uses MedSAM.
 
 If the user asks you for further assistance or evaluation or task, determine if a function should be called, with an output in the format:
 "function_name, argument"
 Examples:
-"get_cancer_subtype, tcga_10.png"
+"subtype_image, tcga_10.png"
 
 We only have three filenames, tcga_10.png, tcga_11.png, tcga_20.png
 """
@@ -229,25 +230,39 @@ def parse_llm_response(response: str) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-async def get_cancer_subtype(image_path: str) -> str:
+async def subtype_image(image_path: str) -> str:
     """Classify cancer subtype from an image."""
     try:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        async with httpx.AsyncClient() as client:
+
+        async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
+            print(f"Sending request to: {config.CONCH_ENDPOINT}/process/{filename}")
             response = await client.get(
-                f"{config.CONCH_ENDPOINT}/process/minio/uploads/{filename}",
+                f"{config.CONCH_ENDPOINT}/process/{filename}",
                 headers={"accept": "application/json"},
             )
 
+        print(response.text)
+
         if response.status_code != 200:
-            return f"Error: Failed to get prediction for {filename}"
+            return f"Error: Failed to get prediction for {filename}. Status: {response.status_code}"
 
         return response.text
 
+    except httpx.TimeoutException:
+        return "Error: Request timed out while waiting for the service"
+    except Exception as e:
+        print(f"Exception occurred: {str(e)}")  # Debug log
+        return f"Error analyzing image: {str(e)}"
+
+
+"""
     except Exception as e:
         return f"Error analyzing image: {str(e)}"
+
+"""
 
 
 async def get_best_image(image_path: str) -> str:
@@ -256,7 +271,7 @@ async def get_best_image(image_path: str) -> str:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
         # Make request to your model endpoint
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
             response = await client.get(
                 f"{config.VIRCHOW_ENDPOINT}/process/{filename}",
                 headers={"accept": "application/json"},
@@ -277,13 +292,22 @@ async def get_segmentation_run(image_path: str) -> str:
         # Extract just the filename from the path
         filename = os.path.basename(image_path)
 
+        endpoint_url = f"{config.SAM_ENDPOINT}/process/{filename}"
+
+        print(f"Making request to: {endpoint_url}")  # Debug print
         # Make request to your model endpoint
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{config.MEDSAM_ENDPOINT}/process/{filename}",
+
+        async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
+            response = await client.post(
+                f"{config.SAM_ENDPOINT}/process/{filename}",
                 headers={"accept": "application/json"},
             )
+
+        print(f"Got response with status: {response.status_code}")  # Debug print
+
         if response.status_code != 200:
+            error_text = await response.text()  # Get error details
+            print(f"Error response: {error_text}")  # Debug print
             return f"Error: Failed to get prediction for {filename}"
 
         return response.text
@@ -294,7 +318,7 @@ async def get_segmentation_run(image_path: str) -> str:
 
 # Function mapping
 function_map = {
-    "get_cancer_subtype": get_cancer_subtype,
+    "subtype_image": subtype_image,
     "get_best_image": get_best_image,
     "get_segmentation_run": get_segmentation_run,
 }
@@ -303,7 +327,7 @@ function_map = {
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "model": "gpt-4o"}
+    return {"status": "healthy", "model": f"{config.MODEL}"}
 
 
 @app.post("/chat")
@@ -345,7 +369,7 @@ async def chat_endpoint(request: ChatRequest):
                                 }
                             )
                         except Exception as e:
-                            print(f"Error reading image from MinIO: {str(e)}")
+                            print(f"Error reading image from object storage: {str(e)}")
                             raise HTTPException(
                                 status_code=400,
                                 detail=f"Error reading image file: {str(e)}",
@@ -369,11 +393,11 @@ async def chat_endpoint(request: ChatRequest):
         if function_name and function_name in function_map:
             try:
                 # Get the model's prediction
-                result = function_map[function_name](arguments)
+                result = await function_map[function_name](arguments)
 
                 FUNCTION_PROMPT = "You are a medical AI assistant specializing in cancer diagnosis interpretation. Provide responses in plain text without markdown."
 
-                if "cancer" in function_name:
+                if "subtype" in function_name:
                     # Create a prompt for GPT to interpret the results
                     analysis_prompt = f"""
     Based on the image analysis, the model has detected the following:
@@ -409,8 +433,7 @@ async def chat_endpoint(request: ChatRequest):
     """
                 # Get GPT's interpretation
                 interpretation_response = client.chat.completions.create(
-                    # model="gpt-4o",
-                    model="deepseek-ai/DeepSeek-V3",
+                    model=config.MODEL,
                     messages=[
                         {"role": "system", "content": FUNCTION_PROMPT},
                         {"role": "user", "content": analysis_prompt},
