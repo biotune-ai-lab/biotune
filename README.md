@@ -21,7 +21,11 @@ Ishan Godawatta - [GitHub](https://github.com/IshanG97), [LinkedIn](https://www.
 William Stark - [GitHub](https://github.com/williamstarkbio), [LinkedIn](https://www.linkedin.com/in/williamstarkbio/)
 
 
-## 1a. set up and run the service locally
+## Web Interface: https://biotune-ai.netlify.app/
+
+## Set up instructions
+
+## 1a. Set up and run the service locally
 
 create `.env` file from template; update environment variable values if needed
 ```bash
@@ -59,7 +63,7 @@ uvicorn service:app --host 127.0.0.1 --port 8000
 ```
 
 
-## 1b. run service in a Docker container
+## 1b. Run service in a Docker container
 
 create `.env.docker` file from template; update environment variable values if needed
 ```bash
@@ -77,7 +81,7 @@ docker compose up
 ```
 
 
-## 2. run the other services
+## 2. Run the other services
 
 clone frontend from https://github.com/IshanG97/biotune-ai-create
 
