@@ -8,8 +8,6 @@ Over a period of 24 hours, we built biotune.ai - an AI assistant and chat interf
 
 
 
-
-
 ## Team
 
 Ananya Bhalla - [GitHub](https://github.com/AnanyaBhalla), [LinkedIn](https://www.linkedin.com/in/ananyabhalla/)
@@ -21,7 +19,10 @@ Ishan Godawatta - [GitHub](https://github.com/IshanG97), [LinkedIn](https://www.
 William Stark - [GitHub](https://github.com/williamstarkbio), [LinkedIn](https://www.linkedin.com/in/williamstarkbio/)
 
 
-## Web Interface: https://biotune-ai.netlify.app/
+## Web Interface
+
+https://biotune-ai.netlify.app/
+
 
 ## Set up instructions
 
