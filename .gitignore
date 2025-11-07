@@ -4,5 +4,6 @@
 k8s/kubectl
 k8s/config_map.yaml
 k8s/cluster_issuer.yaml
+k8s/secret.yaml
 ca.crt
 __pycache__/
