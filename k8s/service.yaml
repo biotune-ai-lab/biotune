@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: biotune-ai
 spec:
-  type: LoadBalancer
+  type: ClusterIP # we don't need LoadBalancer since ngrok now handles this for us
   ports:
     - port: 8000
       targetPort: 8000
