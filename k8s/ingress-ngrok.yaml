@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: biotune-ingress
+  namespace: default  # or your namespace
+spec:
+  ingressClassName: ngrok
+  rules:
+    - host: cleanly-deciding-hookworm.ngrok-free.app  # your ngrok domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: biotune-ai
+                port:
+                  number: 8000

@@ -1,0 +1,72 @@
+ubuntu@xps-9530:/mnt/c/Users/ishan/codebase/ngrok_k8s$ ./ngrok_ingress_setup.sh 
+Adding ngrok Helm repository...
+"ngrok" has been added to your repositories
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "ngrok" chart repository
+Update Complete. ⎈Happy Helming!⎈
+Installing ngrok ingress controller...
+NAME: ngrok-ingress-controller
+LAST DEPLOYED: Sat Feb  8 14:28:20 2025
+NAMESPACE: ngrok-ingress-controller
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+=== DEPRECATION ANNOUNCEMENT / ACTION REQUIRED =================================
+
+See Full Announcement: https://github.com/ngrok/kubernetes-ingress-controller/discussions
+
+On Wednesday September 11th, 2024 this Helm Chart will be renamed to ngrok/ngrok-operator.
+
+If you take no action, then you will not receive future updates to the ingress controller.
+
+Please update your Helm repo with the following commands:
+
+    $ helm repo add ngrok charts.ngrok.com --force-update
+    $ helm repo update
+
+If you need additional help, please reach out to our support team at https://ngrok.com/support
+
+================================================================================
+The ngrok Ingress controller has been deployed as a Deployment type to your
+cluster.
+
+If you haven't yet, create some Ingress resources in your cluster and they will
+be automatically configured on the internet using ngrok.
+
+One example, taken from your cluster, is the Service:
+   "cert-manager-webhook"
+
+You can make this accessible via ngrok with the following manifest:
+--------------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cert-manager-webhook
+  namespace: cert-manager
+spec:
+  ingressClassName: ngrok
+  rules:
+  - host: cert-manager-webhook-55i2b9dq.ngrok.app
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cert-manager-webhook
+            port:
+              number: 443
+--------------------------------------------------------------------------------
+Applying this manifest will make the service "cert-manager-webhook"
+available on the public internet at "https://cert-manager-webhook-55i2b9dq.ngrok.app/".
+
+Once done, view your edges in the Dashboard https://dashboard.ngrok.com/cloud-edge/edges
+Find the tunnels running in your cluster here https://dashboard.ngrok.com/tunnels/agents
+
+If you have any questions or feedback, please join us in https://ngrok.com/slack and let us know!
+Waiting for ngrok controller to be ready...
+pod/ngrok-ingress-controller-kubernetes-ingress-controller-man8x98k condition met
+Setup complete! You can now create Ingress resources using the ngrok class.
+Example usage:
+kubectl apply -f your-ingress.yaml
